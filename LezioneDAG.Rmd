@@ -1,0 +1,19 @@
+---
+title: "Lezione DAG"
+output: html_notebook
+---
+
+```{r}
+install.packages("dagitty")
+install.packages("ggdag")
+install.packages("tidyverse")
+```
+
+```{r}
+library(dagitty)
+library(ggdag)
+library(tidyverse)
+
+load(file = "datilezione.Rdata")
+```
+
