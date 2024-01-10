@@ -2,18 +2,460 @@
 title: "Lezione DAG"
 output: html_notebook
 ---
-
-```{r}
+##### Set-up
+Codice per installare i pacchetti
+```{r eval=FALSE}
 install.packages("dagitty")
 install.packages("ggdag")
 install.packages("tidyverse")
 ```
 
-```{r}
+Codice per caricare i pacchetti:
+```{r include=FALSE}
 library(dagitty)
 library(ggdag)
 library(tidyverse)
 
-load(file = "datilezione.Rdata")
+# NB: il file tra virgolette deve essere nella stessa cartella di questo documento
+load(file = "datilezione.Rdata") 
+
 ```
+
+# Elemental Confounders
+
+## Relazioni base a due nodi
+
+### 2 nodi indipendenti
+
+Due nodi possono essere causalmente indipendenti o dipendenti.
+
+Possiamo rappresentare due variabili indipendenti come due distribuzioni normali indipendenti. Generiamo dati da queste due distribuzioni:
+
+```{r}
+# consente la riproducibilità dei dati casuali
+set.seed(1) 
+
+# numero di campioni
+n <- 100
+
+# genero due distribuzioni normali indipendenti
+ind <- data.frame(x = rnorm(n),
+                  y = rnorm(n))
+# restituisce i primi elementi del data-frame
+head(ind) 
+```
+
+Plottiamo i dati giusto per vedere che faccia hanno:
+```{r}
+par(pty = "s")
+plot(y~x, data = ind)
+```
+non si vede nessun trend  lineare compe previsto. 
+
+Data l'indipendenza delle variabili, queste possono essere rappresentate attraverso un DAG come due nodi non-uniti da alcun arco:
+```{r}
+library(dagitty)
+library(ggdag)
+dag0 <- dagify(
+  X ~ X,
+  Y ~ Y
+)
+
+ggdag(dag0)+ theme_dag()
+```
+con la funzione `impliedConditionalIndependencies()` del pacchetto `dagitty`, possiamo visualizzare le indipendenze condizionali. In questo caso ci aspettiamo che X e Y siano indipendenti:
+```{r}
+impliedConditionalIndependencies(dag0)
+```
+infatti, X è condizionalmente indipendente da Y.
+
+Se eseguo una regressione lineare, data l'indipendenza il coefficiente di X non sarà significativo:
+```{r}
+summary(
+  lm(y ~ x, data = ind)
+)
+```
+
+cvd (come volevasi dimostare). 
+
+### 2 nodi dipendenti
+
+Ripetiamo l'analisi usando 2 nodi dipendenti stavolta. Per farlo semplicemente facciamo dipendere la media di y dagli elementi di x moltiplicati per una costante.
+
+```{r}
+set.seed(100) 
+
+# genero due distribuzioni normali dipendenti:
+# la media di y è pari a 2 volte la media di x
+
+# prima genero x
+dip <- data.frame(x = rnorm(n))
+
+# poi genero y
+dip$y <- rnorm(n, mean = 2*dip$x)
+
+# restituisce i primi elementi del data-frame
+head(dip) 
+```
+plottiamo i dati:
+```{r}
+par(pty = "s")
+plot(y~x, data = dip)
+```
+
+si vede chiaramente una relazione di tipo lineare questa volta.
+
+Il DAG si rappresenterà a sua volta così:
+
+```{r}
+dag1 <- dagify(
+  y~x
+)
+
+# layout dispone i nodi in maniera particolare; vedremo alcuni esempi.
+# "tree" dispone i dati in ordine grearchico, dalla causa più a monte 
+# alla conseguenza più a valle
+ggdag(dag1, layout = "tree") + 
+  theme_dag()
+```
+Partendo dal DAG anche stavolta controlliamo le indipendenze condizionali:
+```{r}
+impliedConditionalIndependencies(dag1)
+```
+
+Nessun output! vuol dire che non ci sono indipendenze condizionali! Vuol dire che tutti i nodi dipendono dagli altri.
+
+Ora facciamo la regressione lineare:
+```{r}
+summary(
+  lm(y~x, data = dip)
+  )
+```
+
+Il coefficiente di X in questo caso è significativo! DA notare la rimilarità con il valore che abbiamo imposto nel generare dati da y, ovvero 2. Infatti, noi nel generare dati abbiamo imposto che la media di Y sia il doppio della media di X, quindi $y=2\,x$ come ci ha restituito la regressione (a meno dell'errore). Controllare il valore e la significatività dei coefficienti sarà uno dei nostri modi per verificare se la stima di questi è corretta oppure è biased.
+
+Per completezza plottiamo i dati con la linea di regressione:
+```{r}
+plot(y ~ x, data = dip)
+abline(lm(y~x, data = dip))
+```
+
+Bene, ora procediamo con gli elemental confounders.
+
+
+## pipe
+
+La pipe è la struttura a tre nodi in cui ogni variabile influenza la successiva causalmente. 
+
+Rappresentiamola con un DAG su R:
+```{r}
+dagpipe <- dagify(
+  y~z,
+  z~x
+)
+
+ggdag(dagpipe, layout = "tree") + theme_dag_blank()
+```
+Riassumiamo qui di seguito le indipendenze condizionali della pipe:
+$$
+\begin{array}{ll}
+Y \not\!\perp\!\!\!\perp X & \text{[x and y are assocaited]} \\
+Y \perp \! \! \!  \perp X|Z & \text{[x and y are not associated, conditional on Z]}
+ 
+\end{array}
+$$
+il che vuol dire che se facciamo una regressione lineare `y~x`, x ha coefficiente significativo; se invece facciamo una regressione `y~x+z`, x avrà coefficiente non significativo, perchè il flusso associativo tra y e x sarà bloccato. 
+
+Verifichiamo le dipendenze condizionali con la funzione di R:
+```{r}
+impliedConditionalIndependencies(dagpipe)
+```
+et voilà! NB: la funzione restituisce solo i casi in cui le variabili sono causalmente indipendenti, non gli altri casi. 
+
+Bene, testiamolo. Generiamo dei dati che seguono la struttura di una pipe:
+```{r}
+set.seed(2024) # riproducibilità
+
+dfpipe <- data.frame(x = rnorm(n))
+# la media dei valori di z dipende da x
+dfpipe$z <- rnorm(n, mean = 2*dfpipe$x)
+# la media dei valori di y dipende da z
+dfpipe$y <- rnorm(n, mean = 3*dfpipe$z)
+
+head(dfpipe) # restituisce le prime 6 righe del data-frame
+```
+Bene, ora eseguiamo due regressioni lineari, una con z e l'altra senza e confrontiamo i risultati:
+```{r}
+lm(y~x, data = dfpipe) %>% summary()
+```
+
+```{r}
+lm(y~x+z, data = dfpipe) %>% summary()
+```
+come ci aspettavamo includendo la variabile Z, X non è più significativo. Al contrario non includendolo otteniamo la stima causale di X su Y. Da notare come nel primo caso il coefficiente complessivo sia il prodotto delle costanti da noi inserite nella generazione dei dati; mentre nel secondo caso il coefficiente è pari a quello da noi inserito per generare i dati da z.
+
+
+Proviamo ora a fare l'inverso, ovvero a spiegare X con Y, con e senza la'usilio di Z.
+```{r}
+lm(x~y, data = dfpipe) %>% summary()
+```
+
+```{r}
+lm(x~y+z, data = dfpipe) %>% summary()
+```
+in questo caso Y si comporta esattamente come X: significativo senza Z, non significativo in presenza di Z. Questo ci sta ad indicare come è indifferente la direzione delle frecce nel DAG; se ho una pipe le indipendenze condizionali saranno le medesime. 
+
+Anche in questo caso è da notare il valore dei coefficienti. NB: considerazioni sul valore dei coefficienti sarà difficile farle con i prossimi esempi...
+
+Quindi già adesso abbiamo visto come la significatività dei coefficienti non sia per forza indice di causalità: un variabile significativa potrebbe essere una variabile conseguente alla variabile indipendente, oppure una variabile non significativa potrebbe essere una variabile a monte separata da una pipe in presenza delle variabili di controllo intermedie.  
+
+## fork
+
+La fork è quella struttura a tre nodi in cui Z è una causa comune sia di X che di Y.
+
+Costruiamo il DAG:
+```{r}
+dagfork <- dagify(
+  x~z,
+  y~z
+)
+
+ggdag(dagfork, layout = "tree") + theme_dag_blank()
+```
+
+Le indipendenze condizionali della fork sono:
+$$
+\begin{array}{ll}
+Y \not\!\perp\!\!\!\perp X & \text{[x and y are associated]} \\
+Y \perp \! \! \!  \perp X|Z & \text{[x and y are not associated, conditional on Z]}
+ 
+\end{array}
+$$
+
+testiamole:
+```{r}
+impliedConditionalIndependencies(dagfork)
+```
+cvd. 
+
+Ora generiamo dati da una fork e vediamo se le condizioni vengono rispettate:
+```{r}
+set.seed(2024)
+# genero valori di z
+dffork <- data.frame(
+  z =rnorm(n)
+)
+# genero valori di x e di y in relazione al valore di z
+dffork$x <- rnorm(n, mean = 2*dffork$z)
+dffork$y <- rnorm(n, mean = 3*dffork$z)
+head(dffork)
+```
+Bene, ora eseguiamo due regressioni lineari (cercando di spiegare y sempre grazie ad x), una con z e l'altra senza e confrontiamo i risultati:
+```{r}
+lm(y~x, data = dffork) %>% summary()
+```
+
+```{r}
+lm(y~x+z, data = dffork) %>% summary()
+```
+esattamente come con la pipe nel primo caso X ha coefficiente significativo (associazione aperta), mentre nel secondo caso il coefficiente di x non è significativo (l'associazione è bloccata). da notare che nel secondo caso il coefficiente di z è simile al valore con cui abbiamo generato i dati.
+
+Una funzione interessante che useremo anche nella prossima lezione è `ggdag_equivalent_dags()` che dato un DAG in input restituisce i DAGs equivalenti (con le stesse indipendenze condizionali). Proviamo ad inserire il DAG della fork:
+```{r}
+ggdag_equivalent_dags(dagfork)
+```
+
+Ed ecco un'ulteriore prova che pipe e fork hanno le stesse indipendenze condizionali. In altre parole, senza conoscenze scientifiche pregresse e partendo dai soli dati, queste tre strutture sono identiche statisticamente. 
+
+## collider 
+
+Il collider è quella struttura a 3 nodi in cui 
+
+```{r}
+dagcoll <- dagify(
+  z~x+y,
+  # possiamo anche inserire le coordinate dei nodi a piacere
+  coords = list(
+    x = c(x = 0, z = 1, y = 2), # coord di x per i tre nodi
+    y = c(x = 1, z = 0, y = 1) # coord di y per i tre nodi
+                  ) 
+)
+
+ggdag(dagcoll) + theme_dag_blank()
+```
+Le indipendenze condizionali del collider sono le seguenti:
+$$
+\begin{array}{ll}
+Y \!\perp\!\!\!\perp X & \text{[x and y are not associated]} \\
+Y \not\!\perp \! \! \!  \perp X|Z & \text{[x and y are associated, conditional on Z]} 
+\end{array}
+$$
+testiamole:
+```{r}
+impliedConditionalIndependencies(dagcoll)
+```
+x e y sono indipendenti solo se **non** condizionati per z.
+
+Generiamo dati e testiamo con i numeri:
+```{r}
+set.seed(2024)
+# genero x e y da due distribuzioni normali indipendenti
+dfcoll <- data.frame(x = rnorm(n),
+                     y = rnorm(n))
+# genero z con media che dipende in parti uguali sia da x che da y
+dfcoll$z <- rnorm(n, mean = dfcoll$x+dfcoll$y)
+head(dfcoll)
+```
+Ora procediamo nuovamente eseguendo due regressioni lineari stratificando o meno per la variabile z e confrontiamo i risultati.
+```{r}
+lm(y~x, data = dfcoll) %>% summary()
+```
+
+```{r}
+lm(y~x+z, data = dfcoll) %>% summary()
+```
+
+In assenza di z, x non ha coefficiente significativo, infatti, l'associazione tra x e y è bloccata. Al contratio, sia x che z sono significativi (!!!) includendo z come covariata, perché il flusso associativo in questo caso è aperto. 
+
+## considerazioni sugli elemental confounders
+
+In conclusione, abbiamo dimostrato come le regressioni lineari non misurino la causalità tra le variabili, ma la loro associazione e abbiamo visto come questa vari in base alle variabili incluse o meno nella regressione. Abbiamo visto come la significatività di un coefficiente non abbia nulla a che fare con un rapporto causale tra le variabili; nel caso di fork e collider ad esempio il coefficiente di x può essere significativo, ma non c'è nessun rapporto causale che colleghi x a y! 
+
+Quindi, pensate a cosa potrebbe succedere se in una regressione lineare multivariabile tutte le variabili misurate, indipendentemente dal loro rapporto causale, fossero usate come predittori; si aprirebbero e chiuderebbero una serie di flussi associativi di cui, in assenza di un DAG, non siamo a conoscenza restituendoci una stima dei coefficienti totalmente slegata da rapporti di tipo causale. Nella prossima lezione avremo modo di vedere questo effetto. 
+
+Pensare ad un DAG prima di effettuare qualsiasi tipo di analisi ci consente di ragionare sui flussi associativi, selezionare le variabili da introdurre come covariate e ad evitare bias nella stima dei coefficienti. Inoltre, possono anche aiutarci nel design sperimentale a *selesionare* quali variabili raccogliere. Nella prossima lezione vedremo meglio come. Nel frattempo vediamo alcuni esempi di situazioni che potrebbero essere reali. 
+
+## Esempi 
+
+NB: gli esempi sono semplificati e prevedono tutti una relazione di tipo lineare.
+
+### Funghi, piante e trattamento
+
+Alcuni funghi possono essere dannosi per le piante e inibirne lo sviluppo. è stato preso gruppo di 100 piante della stessa specie. La metà sono state trattate con un nuovo trattamento antifungino e, al momento del trattamento, ne è stata misurata l'altezza (h0). Poi sono state incubate per un certo periodo di tempo. Al termine dell'esperimento è stata nuovamente misurata l'altezza (h1) di ogni pianta ed è stato valutato se ci fosse stato lo sviluppo di funghi nel terreno. I dati sono stati raccolti nel seguente data frame:
+
+```{r}
+fungus
+```
+in cui `h0` e `h1` sono rispettivamente l'altezza iniziale e finale, `treatment` indica se le piante sono state trattate (`1`) oppure no (`0`) e `fungus` indica se si è sviluppato (`1`) o meno (`0`) il micelio del fungo. 
+
+è stata quindi fatta una regressione lineare con *tutte* le variabili misurate:
+```{r}
+lm(h1~h0 + treatment + fungus, data = fungus) %>% summary()
+```
+dalla regressione si *dedurrebbe* che l'altezza iniziale gioca un ruolo rilevante nel predirre l'altezza finale insieme alla presenza o meno del fungo. Notiamo inoltre che l'altezza iniziale ha coefficiente positivo, il che vuol dire che all'aumentare dell'altezza iniziale è ragionevole aspettarsi un'aumento dell'altezza finale; mentre, il coefficiente sulla presenza del fungo è negativo, ad indicare come questo inibisca la crescita della pianta. Il trattamento tuttavia sembra non avere alcun effetto, sulla crescita. 
+
+Ma ne siamo sicuri? Controlliamo i dati. Faccio un grafico riportando l'altezza finale sulle ordinate e lo stato del trattamento sulle ascisse. Per visualizzare meglio la distribuzione delle altezze utilizzo `ggplot` e la funzione `geom_violin()` che essenzialmente rappresenta come sono distriuiti i valori della variabile; le zone di maggiore larghezza hanno una ensità di punti maggiore. `geom_violin()` è un'alternativa al boxplot. 
+```{r}
+fungus %>% # passo il data-frame a ggplot
+  ggplot(aes(x = as.factor(treatment), # as.factor dice a ggplot di usare x come categoria, non come numero
+             y = h1)) +
+  geom_violin()
+```
+
+nonostante non sia particolarmente netta (spoiler, nei dati sperimentali non lo è quasi mai), vi è una differenza di distribuzione tra i due gruppi. In particolar modo la "*pancia*" del trattamento è spostata più in alto rispetto alla controparte e valori estremamente bassi sono esclusi. Possiamo spiegare il fatto contando anche che il trattamento non funziona al 100%, ci sono alcuni casi in cui il fungo si è sviluppato con il trattamento; allo stesso tempo ci sono casi in cui il fungo non si è sviluppato senza trattamento. 
+
+Quindi osservando i dati possiamo dire che a occhio il tratamento ha funzionato. Allora cosa c'è che non va? Pensiamo DAG del fenomeno che stiamo analizzando. Sappiamo che l'altezza finale sarà sicuramente influenzata dall'altezza inizale e dalla presenza del fungo. Sappiamo che il trattamento influisce sulla presenza del fungo; inoltre, dati in letteratura ci mostrano che il trattamento non ha influenza sulla crescita della pianta pianta. da queste informazioni possiamo costruire il DAG.
+```{r}
+dag_fungus <- dagify(
+  h1 ~ h0 + fungus,
+  fungus ~ treat
+  
+)
+
+ggdag(dag_fungus, node_size = 20, layout = "tree") + theme_dag()
+```
+
+notiamo che h1 e trattamento sono collegati da una pipe. Introducendo quindi la variabile fungo abbiamo bloccato il canale associativo tra le due variabili, ecco perché il coefficiente non è signficiativo.
+
+Riproviamo evitando di inserire la presenza del fungo:
+```{r}
+lm(h1~h0 + treatment , data = fungus) %>% summary()
+```
+
+ trattamento significativo! Trattare complessivamente aiuta ad aumentare (coefficiente positivo), l'altezza finale delle piante. 
+
+Ma `h0` che influenza ha invece? Proviamo a rimuoverlo:
+```{r}
+lm(h1~ treatment , data = fungus) %>% summary()
+```
+
+il trattamento ha perso significatività. `h0` è un **descendant**, un collegamento terminale alle variabili di interesse o a variabili di controllo intermedie. I descendand sono po' come dei jolly e possono aiutare la stima dei coefficienti come possono aumentarne il bias o non avere alcun effetto. In questo caso è una causa della variabile di interesse h1 e la sua presenza nella regressione è favorevole perché ci consente di stimare con più precisione l'effetto del trattamento. 
+
+NB: se h0 fosse stata una conseguenza di h1, sarebbe stato un descendant malevolo e la sua presenza avrebbe alterato la corretta stima dell'effetto del trattanento. Impostare correttamente un DAG è utile anche per queste cose. 
+
+### umbrellas and car creashes
+
+Un recente studio pubblicato su Topolino ha fatto scalpore perché affermava che ci fosse un rapporto di causa-effetto tra incidenti stradali e il numero di ombrelli presenti su strada. Gli autori insistevano nell'affermare che gli ombrelli per gli automobilisti fossero come i velli rossi per i tori, aumentandone l'aggressivita e la temerarietà. I dati sono riportati nel data-frame umbrellas:
+
+```{r}
+head(umbrellas)
+```
+dove `crashes` indica il numero di incidenti, `umbrellas` indica il numero di ombrelli osservati dai ricercatori quel giorno e `rain` è una scala arbitraria che indica quanto pioveva quel giorno (0 no pioggia, >0 pioggia di intensità correlata al valore).
+
+Gli autori nel paper hanno fatto la seguente regressione lineare ottenendo un coefficiente significativo:
+```{r}
+lm(crashes~umbrellas, data = umbrellas) %>% summary()
+```
+sembrerebbe quindi che la presenza degli ombrelli per strada aumenti significativamente il numero di incidenti...
+
+Pensiamo al DAG di questo fenomeno: sappiamo sicuramente che la piogia causa l'aumento sia del numero di ombrelli per strada per ripararsi dalla pioggia, sia il numero di incidenti per ridotta visibilità, ecc.
+
+```{r}
+dag_rain <- dagify(
+  crashes ~ rain,
+  umbr ~ rain
+)
+
+ggdag(dag_rain, layout = "tree", node_size = 20) + theme_dag()
+```
+è decisamente una fork. Stratificando per rain l'effetto dovrebbe scomprarire:
+```{r}
+lm(crashes~umbrellas +rain, data = umbrellas) %>% summary()
+```
+
+e infatti il numero di ombrelli non ha più coefficiente significativo. Inviamo agli autori la nostra analisi e il paper viene ritrattato. 
+
+### covid, fumo e tosse
+
+I DAG possono essere utili anche per evitare bias negli studi clinici. Un esempio è riportato dal seguente dataset dove sono stati selezionati 300 pazienti ed è stato verificato se avessero contratto o meno il covid (`covid`, 1=Sì, 0=No), se soffrissero di problemi respiratori (`RespProb`, scala 0-10 per gravità) e quanti pacchetti di sigarette consumassero al giorno (`packs`):
+
+```{r}
+smoke
+```
+
+si vuole vedere se il fumo ha impattato sulla contrazione del covid; viene fatta quindi una regressione lineare con tutte le variabili:
+
+```{r}
+lm(covid ~ RespProb + packs, data = smoke) %>% summary()
+```
+
+tutti i coefficienti sono significativi. Dalla regressione sembrerebbe che i problemi repsiratori impattano positivamente sulla contrazione del covid (coefficiente positivo), ma al contrario dalla regressione sembrerebbe che si riduca il rischio di contrarre il covid all'aumentare dei pacchetti consumati. 
+
+Come mai? costruiamo il DAG. Assumiamo che il fumo indebolisca le difese delle vie respiratorie e quindi influenzi il contagio del covid. Possiamo inoltre dire che i problemi respiratori sono frutto sia del numero di pacchetti consumati, sia del fatto di avere o meno contratto il covid (il cosiddetto long-covid). Pertanto u possibile DAG potrebbe essere questo:
+```{r}
+dag_covid <- dagify(
+  RespProb ~ covid + packs,
+  covid ~ packs,
+  coords = list(
+    x = c(covid = 0, RespProb = 1, packs = 2),
+    y = c(covid = 1, RespProb = 0, packs = 1)
+  ) 
+)
+
+ggdag_classic(dag_covid) + # modo alternativo per plottare un dag
+  theme_dag()
+```
+
+i problemi respiratori fungono da collider in questo caso, pertanto stratificando per il collider abbiamo aperto un'altra via di associazione tra covid e packs. Ripetiamo rimuovendo i problemi respiratori come covariata:
+```{r}
+lm(covid ~  packs, data = smoke) %>% summary()
+```
+
+in questo caso il coefficiente è significativo e positivo, ci sta ad indicare che il numero di pacchetti consumati aumenta il rischiio di contrarre il covid, come ci aspettavamo. 
+
+
+
+
+
+
 
