@@ -11,7 +11,7 @@ install.packages("tidyverse")
 ```
 
 Codice per caricare i pacchetti:
-```{r include=FALSE}
+```{r}
 library(dagitty)
 library(ggdag)
 library(tidyverse)
@@ -29,7 +29,7 @@ load(file = "datilezione.Rdata")
 
 Due nodi possono essere causalmente indipendenti o dipendenti.
 
-Possiamo rappresentare due variabili indipendenti come due distribuzioni normali indipendenti. Generiamo dati da queste due distribuzioni:
+Possiamo rappresentare due variabili indipendenti come due distribuzioni normali. Generiamo dati da queste:
 
 ```{r}
 # consente la riproducibilità dei dati casuali
@@ -50,9 +50,9 @@ Plottiamo i dati giusto per vedere che faccia hanno:
 par(pty = "s")
 plot(y~x, data = ind)
 ```
-non si vede nessun trend  lineare compe previsto. 
+non si vede nessun trend come previsto. 
 
-Data l'indipendenza delle variabili, queste possono essere rappresentate attraverso un DAG come due nodi non-uniti da alcun arco:
+Data l'indipendenza delle variabili, queste possono essere rappresentate attraverso un DAG come due nodi disuniti. Il codice per generare questo DAG con R è il seguente:
 ```{r}
 library(dagitty)
 library(ggdag)
@@ -63,11 +63,11 @@ dag0 <- dagify(
 
 ggdag(dag0)+ theme_dag()
 ```
-con la funzione `impliedConditionalIndependencies()` del pacchetto `dagitty`, possiamo visualizzare le indipendenze condizionali. In questo caso ci aspettiamo che X e Y siano indipendenti:
+Con la funzione `impliedConditionalIndependencies()` del pacchetto `dagitty`, possiamo visualizzare le indipendenze condizionali. In questo caso ci aspettiamo che X e Y siano indipendenti:
 ```{r}
 impliedConditionalIndependencies(dag0)
 ```
-infatti, X è condizionalmente indipendente da Y.
+infatti, X è condizionalmente indipendente da Y (e viceversa).
 
 Se eseguo una regressione lineare, data l'indipendenza il coefficiente di X non sarà significativo:
 ```{r}
@@ -80,7 +80,7 @@ cvd (come volevasi dimostare).
 
 ### 2 nodi dipendenti
 
-Ripetiamo l'analisi usando 2 nodi dipendenti stavolta. Per farlo semplicemente facciamo dipendere la media di y dagli elementi di x moltiplicati per una costante.
+Ripetiamo l'analisi usando 2 nodi dipendenti stavolta. Per creare dipendenza assegnamo alla media di Y i valori di X moltiplicati per una costante ( in questo caso 2). Così facendo genereremo dati con errore, ma con media doppia rispetto ad X.
 
 ```{r}
 set.seed(100) 
@@ -97,7 +97,7 @@ dip$y <- rnorm(n, mean = 2*dip$x)
 # restituisce i primi elementi del data-frame
 head(dip) 
 ```
-plottiamo i dati:
+Plottiamo i dati:
 ```{r}
 par(pty = "s")
 plot(y~x, data = dip)
@@ -105,7 +105,7 @@ plot(y~x, data = dip)
 
 si vede chiaramente una relazione di tipo lineare questa volta.
 
-Il DAG si rappresenterà a sua volta così:
+Il relativo DAg lo si può costruire e rappresentare con il seguente codice:
 
 ```{r}
 dag1 <- dagify(
@@ -123,9 +123,9 @@ Partendo dal DAG anche stavolta controlliamo le indipendenze condizionali:
 impliedConditionalIndependencies(dag1)
 ```
 
-Nessun output! vuol dire che non ci sono indipendenze condizionali! Vuol dire che tutti i nodi dipendono dagli altri.
+Nessun output. Vuol dire che non ci sono indipendenze condizionali! Vuol dire che tutti i nodi dipendono dagli altri.
 
-Ora facciamo la regressione lineare:
+Procediamo con la regressione lineare:
 ```{r}
 summary(
   lm(y~x, data = dip)
@@ -164,7 +164,7 @@ Y \perp \! \! \!  \perp X|Z & \text{[x and y are not associated, conditional on 
  
 \end{array}
 $$
-il che vuol dire che se facciamo una regressione lineare `y~x`, x ha coefficiente significativo; se invece facciamo una regressione `y~x+z`, x avrà coefficiente non significativo, perchè il flusso associativo tra y e x sarà bloccato. 
+il che vuol dire che se facciamo una regressione lineare `y~x`, x avrà coefficiente significativo; se invece facciamo una regressione `y~x+z`, x avrà coefficiente non significativo, perchè il flusso associativo tra y e x sarà bloccato. 
 
 Verifichiamo le dipendenze condizionali con la funzione di R:
 ```{r}
@@ -184,7 +184,7 @@ dfpipe$y <- rnorm(n, mean = 3*dfpipe$z)
 
 head(dfpipe) # restituisce le prime 6 righe del data-frame
 ```
-Bene, ora eseguiamo due regressioni lineari, una con z e l'altra senza e confrontiamo i risultati:
+Bene, ora eseguiamo due regressioni lineari, una con Z e l'altra senza e confrontiamo i risultati:
 ```{r}
 lm(y~x, data = dfpipe) %>% summary()
 ```
@@ -192,7 +192,7 @@ lm(y~x, data = dfpipe) %>% summary()
 ```{r}
 lm(y~x+z, data = dfpipe) %>% summary()
 ```
-come ci aspettavamo includendo la variabile Z, X non è più significativo. Al contrario non includendolo otteniamo la stima causale di X su Y. Da notare come nel primo caso il coefficiente complessivo sia il prodotto delle costanti da noi inserite nella generazione dei dati; mentre nel secondo caso il coefficiente è pari a quello da noi inserito per generare i dati da z.
+come ci aspettavamo includendo la variabile Z, X non è più significativo. Al contrario non includendolo otteniamo la stima causale di X su Y. Da notare come nel primo caso il coefficiente complessivo sia il prodotto delle costanti da noi inserite nella generazione dei dati; mentre nel secondo caso il coefficiente è pari a quello da noi inserito per generare i dati di Y da Z.
 
 
 Proviamo ora a fare l'inverso, ovvero a spiegare X con Y, con e senza la'usilio di Z.
@@ -205,9 +205,7 @@ lm(x~y+z, data = dfpipe) %>% summary()
 ```
 in questo caso Y si comporta esattamente come X: significativo senza Z, non significativo in presenza di Z. Questo ci sta ad indicare come è indifferente la direzione delle frecce nel DAG; se ho una pipe le indipendenze condizionali saranno le medesime. 
 
-Anche in questo caso è da notare il valore dei coefficienti. NB: considerazioni sul valore dei coefficienti sarà difficile farle con i prossimi esempi...
-
-Quindi già adesso abbiamo visto come la significatività dei coefficienti non sia per forza indice di causalità: un variabile significativa potrebbe essere una variabile conseguente alla variabile indipendente, oppure una variabile non significativa potrebbe essere una variabile a monte separata da una pipe in presenza delle variabili di controllo intermedie.  
+Quindi già adesso abbiamo visto come la significatività dei coefficienti non sia per forza indice di causalità: un variabile significativa potrebbe essere una variabile conseguente alla variabile indipendente, oppure una variabile non significativa potrebbe essere una variabile a monte la cui associazione è bloccata dalla presenza di variabili di controllo intermedie.  
 
 ## fork
 
@@ -232,7 +230,7 @@ Y \perp \! \! \!  \perp X|Z & \text{[x and y are not associated, conditional on 
 \end{array}
 $$
 
-testiamole:
+Testiamole:
 ```{r}
 impliedConditionalIndependencies(dagfork)
 ```
@@ -250,7 +248,7 @@ dffork$x <- rnorm(n, mean = 2*dffork$z)
 dffork$y <- rnorm(n, mean = 3*dffork$z)
 head(dffork)
 ```
-Bene, ora eseguiamo due regressioni lineari (cercando di spiegare y sempre grazie ad x), una con z e l'altra senza e confrontiamo i risultati:
+Bene, ora eseguiamo due regressioni lineari (cercando di spiegare Y sempre grazie ad X), una con Z e l'altra senza; confrontiamo i risultati:
 ```{r}
 lm(y~x, data = dffork) %>% summary()
 ```
@@ -258,9 +256,9 @@ lm(y~x, data = dffork) %>% summary()
 ```{r}
 lm(y~x+z, data = dffork) %>% summary()
 ```
-esattamente come con la pipe nel primo caso X ha coefficiente significativo (associazione aperta), mentre nel secondo caso il coefficiente di x non è significativo (l'associazione è bloccata). da notare che nel secondo caso il coefficiente di z è simile al valore con cui abbiamo generato i dati.
+esattamente come con la pipe nel primo caso X ha coefficiente significativo (associazione aperta), mentre nel secondo caso il coefficiente di X non è significativo (l'associazione è bloccata). Da notare che nel secondo caso il coefficiente di Z è simile al valore con cui abbiamo generato i dati.
 
-Una funzione interessante che useremo anche nella prossima lezione è `ggdag_equivalent_dags()` che dato un DAG in input restituisce i DAGs equivalenti (con le stesse indipendenze condizionali). Proviamo ad inserire il DAG della fork:
+Una funzione interessante che useremo anche nella prossima lezione è `ggdag_equivalent_dags()`  restituisce i DAGs equivalenti (con le stesse indipendenze condizionali) ad un dato DAG in input . Proviamo ad inserire il DAG della fork:
 ```{r}
 ggdag_equivalent_dags(dagfork)
 ```
@@ -269,7 +267,7 @@ Ed ecco un'ulteriore prova che pipe e fork hanno le stesse indipendenze condizio
 
 ## collider 
 
-Il collider è quella struttura a 3 nodi in cui 
+Il collider è quella struttura a 3 nodi in cui Z è una conseguenza comune di X ed Y.
 
 ```{r}
 dagcoll <- dagify(
@@ -290,11 +288,11 @@ Y \!\perp\!\!\!\perp X & \text{[x and y are not associated]} \\
 Y \not\!\perp \! \! \!  \perp X|Z & \text{[x and y are associated, conditional on Z]} 
 \end{array}
 $$
-testiamole:
+Testiamole:
 ```{r}
 impliedConditionalIndependencies(dagcoll)
 ```
-x e y sono indipendenti solo se **non** condizionati per z.
+X e Y sono indipendenti solo se **non** condizionati per Z.
 
 Generiamo dati e testiamo con i numeri:
 ```{r}
@@ -306,7 +304,7 @@ dfcoll <- data.frame(x = rnorm(n),
 dfcoll$z <- rnorm(n, mean = dfcoll$x+dfcoll$y)
 head(dfcoll)
 ```
-Ora procediamo nuovamente eseguendo due regressioni lineari stratificando o meno per la variabile z e confrontiamo i risultati.
+Ora procediamo nuovamente eseguendo due regressioni lineari stratificando o meno per la variabile Z e confrontiamo i risultati.
 ```{r}
 lm(y~x, data = dfcoll) %>% summary()
 ```
@@ -315,13 +313,13 @@ lm(y~x, data = dfcoll) %>% summary()
 lm(y~x+z, data = dfcoll) %>% summary()
 ```
 
-In assenza di z, x non ha coefficiente significativo, infatti, l'associazione tra x e y è bloccata. Al contratio, sia x che z sono significativi (!!!) includendo z come covariata, perché il flusso associativo in questo caso è aperto. 
+In assenza di Z, X non ha coefficiente significativo, infatti, l'associazione tra X e Y è bloccata. Al contratio, sia X che Z sono significativi (!!!) includendo Z come covariata, perché il flusso associativo in questo caso è aperto. 
 
 ## considerazioni sugli elemental confounders
 
-In conclusione, abbiamo dimostrato come le regressioni lineari non misurino la causalità tra le variabili, ma la loro associazione e abbiamo visto come questa vari in base alle variabili incluse o meno nella regressione. Abbiamo visto come la significatività di un coefficiente non abbia nulla a che fare con un rapporto causale tra le variabili; nel caso di fork e collider ad esempio il coefficiente di x può essere significativo, ma non c'è nessun rapporto causale che colleghi x a y! 
+In conclusione, abbiamo dimostrato come le regressioni lineari non misurino la causalità tra le variabili, ma la loro associazione e abbiamo visto come questa vari in base alle variabili incluse o meno nella regressione. Abbiamo visto come la significatività di un coefficiente non abbia nulla a che fare con un rapporto causale tra le variabili; nel caso di fork e collider ad esempio il coefficiente di X può essere significativo, ma non c'è nessun rapporto causale che colleghi X a Y! 
 
-Quindi, pensate a cosa potrebbe succedere se in una regressione lineare multivariabile tutte le variabili misurate, indipendentemente dal loro rapporto causale, fossero usate come predittori; si aprirebbero e chiuderebbero una serie di flussi associativi di cui, in assenza di un DAG, non siamo a conoscenza restituendoci una stima dei coefficienti totalmente slegata da rapporti di tipo causale. Nella prossima lezione avremo modo di vedere questo effetto. 
+Quindi, pensate a cosa potrebbe succedere se in una regressione lineare multivariabile  fossero usate tutte le variabili misurate come predittori indipendentemente dal loro rapporto causale; si aprirebbero e chiuderebbero una serie di flussi associativi di cui, in assenza di un DAG, non siamo a conoscenza restituendoci una stima dei coefficienti totalmente slegata da rapporti di tipo causale. Nella prossima lezione avremo modo di vedere questo effetto. 
 
 Pensare ad un DAG prima di effettuare qualsiasi tipo di analisi ci consente di ragionare sui flussi associativi, selezionare le variabili da introdurre come covariate e ad evitare bias nella stima dei coefficienti. Inoltre, possono anche aiutarci nel design sperimentale a *selesionare* quali variabili raccogliere. Nella prossima lezione vedremo meglio come. Nel frattempo vediamo alcuni esempi di situazioni che potrebbero essere reali. 
 
@@ -331,7 +329,7 @@ NB: gli esempi sono semplificati e prevedono tutti una relazione di tipo lineare
 
 ### Funghi, piante e trattamento
 
-Alcuni funghi possono essere dannosi per le piante e inibirne lo sviluppo. è stato preso gruppo di 100 piante della stessa specie. La metà sono state trattate con un nuovo trattamento antifungino e, al momento del trattamento, ne è stata misurata l'altezza (h0). Poi sono state incubate per un certo periodo di tempo. Al termine dell'esperimento è stata nuovamente misurata l'altezza (h1) di ogni pianta ed è stato valutato se ci fosse stato lo sviluppo di funghi nel terreno. I dati sono stati raccolti nel seguente data frame:
+Alcuni funghi possono essere dannosi per le piante e inibirne lo sviluppo. è stato preso gruppo di 100 piante della stessa specie. La metà sono state trattate con un nuovo trattamento antifungino e, al momento del trattamento, ne è stata misurata l'altezza (h0). Poi sono state incubate per un certo periodo di tempo. Al termine dell'esperimento è stata nuovamente misurata l'altezza (h1) di ogni pianta ed è stato valutato se si fossero sviluppati anche i funghi dannosi o meno. I dati sono stati raccolti nel seguente data frame:
 
 ```{r}
 fungus
@@ -342,9 +340,9 @@ in cui `h0` e `h1` sono rispettivamente l'altezza iniziale e finale, `treatment`
 ```{r}
 lm(h1~h0 + treatment + fungus, data = fungus) %>% summary()
 ```
-dalla regressione si *dedurrebbe* che l'altezza iniziale gioca un ruolo rilevante nel predirre l'altezza finale insieme alla presenza o meno del fungo. Notiamo inoltre che l'altezza iniziale ha coefficiente positivo, il che vuol dire che all'aumentare dell'altezza iniziale è ragionevole aspettarsi un'aumento dell'altezza finale; mentre, il coefficiente sulla presenza del fungo è negativo, ad indicare come questo inibisca la crescita della pianta. Il trattamento tuttavia sembra non avere alcun effetto, sulla crescita. 
+dalla regressione si *dedurrebbe* che l'altezza iniziale gioca un ruolo rilevante nel predirre l'altezza finale insieme alla presenza o meno del fungo. Notiamo inoltre che l'altezza iniziale ha coefficiente positivo, il che vuol dire che all'aumentare dell'altezza iniziale è ragionevole aspettarsi un'aumento dell'altezza finale (più la pianta è alta al tempo 0, più sarà alta al termine dell'esperimento); mentre, il coefficiente sulla presenza del fungo è negativo, ad indicare come questo inibisca la crescita della pianta. Il trattamento tuttavia sembra non avere alcun effetto, sulla crescita. 
 
-Ma ne siamo sicuri? Controlliamo i dati. Faccio un grafico riportando l'altezza finale sulle ordinate e lo stato del trattamento sulle ascisse. Per visualizzare meglio la distribuzione delle altezze utilizzo `ggplot` e la funzione `geom_violin()` che essenzialmente rappresenta come sono distriuiti i valori della variabile; le zone di maggiore larghezza hanno una ensità di punti maggiore. `geom_violin()` è un'alternativa al boxplot. 
+Ma ne siamo sicuri? Controlliamo i dati. Faccio un grafico riportando l'altezza finale sulle ordinate e lo stato del trattamento sulle ascisse. Per visualizzare meglio la distribuzione delle altezze utilizzo `ggplot` e la funzione `geom_violin()` che essenzialmente rappresenta come sono distriuiti i valori della variabile; le zone di maggiore larghezza hanno una densità di punti maggiore. `geom_violin()` è un'alternativa al boxplot. 
 ```{r}
 fungus %>% # passo il data-frame a ggplot
   ggplot(aes(x = as.factor(treatment), # as.factor dice a ggplot di usare x come categoria, non come numero
@@ -354,7 +352,7 @@ fungus %>% # passo il data-frame a ggplot
 
 nonostante non sia particolarmente netta (spoiler, nei dati sperimentali non lo è quasi mai), vi è una differenza di distribuzione tra i due gruppi. In particolar modo la "*pancia*" del trattamento è spostata più in alto rispetto alla controparte e valori estremamente bassi sono esclusi. Possiamo spiegare il fatto contando anche che il trattamento non funziona al 100%, ci sono alcuni casi in cui il fungo si è sviluppato con il trattamento; allo stesso tempo ci sono casi in cui il fungo non si è sviluppato senza trattamento. 
 
-Quindi osservando i dati possiamo dire che a occhio il tratamento ha funzionato. Allora cosa c'è che non va? Pensiamo DAG del fenomeno che stiamo analizzando. Sappiamo che l'altezza finale sarà sicuramente influenzata dall'altezza inizale e dalla presenza del fungo. Sappiamo che il trattamento influisce sulla presenza del fungo; inoltre, dati in letteratura ci mostrano che il trattamento non ha influenza sulla crescita della pianta pianta. da queste informazioni possiamo costruire il DAG.
+Quindi osservando i dati possiamo dire che a occhio il tratamento ha funzionato. Allora cosa c'è che non va? Pensiamo al DAG del fenomeno che stiamo analizzando. Sappiamo che l'altezza finale sarà sicuramente influenzata dall'altezza inizale e dalla presenza del fungo. Sappiamo che il trattamento influisce sulla presenza del fungo; inoltre, dati in letteratura ci mostrano che il trattamento non ha influenza sulla crescita della pianta pianta. Da queste informazioni possiamo costruire il DAG.
 ```{r}
 dag_fungus <- dagify(
   h1 ~ h0 + fungus,
@@ -379,13 +377,13 @@ Ma `h0` che influenza ha invece? Proviamo a rimuoverlo:
 lm(h1~ treatment , data = fungus) %>% summary()
 ```
 
-il trattamento ha perso significatività. `h0` è un **descendant**, un collegamento terminale alle variabili di interesse o a variabili di controllo intermedie. I descendand sono po' come dei jolly e possono aiutare la stima dei coefficienti come possono aumentarne il bias o non avere alcun effetto. In questo caso è una causa della variabile di interesse h1 e la sua presenza nella regressione è favorevole perché ci consente di stimare con più precisione l'effetto del trattamento. 
+il trattamento ha perso significatività. `h0` è un **descendant**, un collegamento terminale alle variabili di interesse o a variabili di controllo intermedie. I descendand sono po' come dei jolly e possono aiutare la stima dei coefficienti come possono aumentarne il bias o non avere alcun effetto. In questo caso è una causa della variabile di interesse `h1` e la sua presenza nella regressione è favorevole perché ci consente di stimare con più precisione l'effetto del trattamento. 
 
-NB: se h0 fosse stata una conseguenza di h1, sarebbe stato un descendant malevolo e la sua presenza avrebbe alterato la corretta stima dell'effetto del trattanento. Impostare correttamente un DAG è utile anche per queste cose. 
+NB: se `h0` fosse stata una conseguenza di `h1`, sarebbe stato un descendant malevolo e la sua presenza avrebbe alterato la corretta stima dell'effetto del trattanento. Impostare un DAG è utile anche per queste cose. 
 
 ### umbrellas and car creashes
 
-Un recente studio pubblicato su Topolino ha fatto scalpore perché affermava che ci fosse un rapporto di causa-effetto tra incidenti stradali e il numero di ombrelli presenti su strada. Gli autori insistevano nell'affermare che gli ombrelli per gli automobilisti fossero come i velli rossi per i tori, aumentandone l'aggressivita e la temerarietà. I dati sono riportati nel data-frame umbrellas:
+Un recente studio ha fatto scalpore perché affermava che ci fosse un rapporto di causa-effetto tra incidenti stradali e il numero di ombrelli presenti su strada. Gli autori insistevano nell'affermare che gli ombrelli per gli automobilisti fossero come i velli rossi per i tori, aumentandone l'aggressivita e l'avventatezza. I dati sono riportati nel data-frame umbrellas:
 
 ```{r}
 head(umbrellas)
@@ -408,7 +406,7 @@ dag_rain <- dagify(
 
 ggdag(dag_rain, layout = "tree", node_size = 20) + theme_dag()
 ```
-è decisamente una fork. Stratificando per rain l'effetto dovrebbe scomprarire:
+è decisamente una fork. Quindi Il flusso tra `crashes` e `umbrellas` è aperto se non stratifichiamo per `rain`. Stratificando per `rain` l'effetto dovrebbe scomprarire:
 ```{r}
 lm(crashes~umbrellas +rain, data = umbrellas) %>% summary()
 ```
@@ -423,15 +421,15 @@ I DAG possono essere utili anche per evitare bias negli studi clinici. Un esempi
 smoke
 ```
 
-si vuole vedere se il fumo ha impattato sulla contrazione del covid; viene fatta quindi una regressione lineare con tutte le variabili:
+si vuole vedere se il fumo ha impattato sull'a contrazione'incidenza del covid; viene fatta quindi una regressione lineare con tutte le variabili:
 
 ```{r}
 lm(covid ~ RespProb + packs, data = smoke) %>% summary()
 ```
 
-tutti i coefficienti sono significativi. Dalla regressione sembrerebbe che i problemi repsiratori impattano positivamente sulla contrazione del covid (coefficiente positivo), ma al contrario dalla regressione sembrerebbe che si riduca il rischio di contrarre il covid all'aumentare dei pacchetti consumati. 
+tutti i coefficienti sono significativi. Dalla regressione sembrerebbe che i problemi repsiratori impattano positivamente sulla contrazione del covid (coefficiente positivo), ma al contrario dalla regressione sembrerebbe che si riduca il rischio di contrarre il covid all'aumentare dei pacchetti di sigarette consumati. 
 
-Come mai? costruiamo il DAG. Assumiamo che il fumo indebolisca le difese delle vie respiratorie e quindi influenzi il contagio del covid. Possiamo inoltre dire che i problemi respiratori sono frutto sia del numero di pacchetti consumati, sia del fatto di avere o meno contratto il covid (il cosiddetto long-covid). Pertanto u possibile DAG potrebbe essere questo:
+Come mai? Costruiamo il DAG. è ragionevole pensare che il fumo indebolisca le difese delle vie respiratorie e quindi abbia un impatto sulla contrazione del covid. Possiamo inoltre dire che i problemi respiratori sono frutto sia del numero di pacchetti consumati, sia del fatto di avere o meno contratto il covid (il cosiddetto long-covid). Pertanto un possibile DAG potrebbe essere questo:
 ```{r}
 dag_covid <- dagify(
   RespProb ~ covid + packs,
@@ -446,15 +444,405 @@ ggdag_classic(dag_covid) + # modo alternativo per plottare un dag
   theme_dag()
 ```
 
-i problemi respiratori fungono da collider in questo caso, pertanto stratificando per il collider abbiamo aperto un'altra via di associazione tra covid e packs. Ripetiamo rimuovendo i problemi respiratori come covariata:
+i problemi respiratori fungono da collider in questo caso, pertanto stratificando per il collider abbiamo aperto un'altra via di associazione tra covid e packs, il che potrebbe spiegare lo strano risultato che abbiamo ottenuto. Ripetiamo rimuovendo i problemi respiratori come covariata:
 ```{r}
 lm(covid ~  packs, data = smoke) %>% summary()
 ```
 
-in questo caso il coefficiente è significativo e positivo, ci sta ad indicare che il numero di pacchetti consumati aumenta il rischiio di contrarre il covid, come ci aspettavamo. 
+in questo caso il coefficiente è significativo e positivo, ci sta ad indicare che il numero di pacchetti consumati aumenta il rischio di contrarre il covid, come ci aspettavamo. 
+
+Da notare che la probabilità associata è ridotta nonosante il dato è corretto. Questo sottolinea ancora una volta come la significatività non debba essere intrepretata ciecamente come metrica per la causalità dei fenomeni. 
+
+# Backdoor path, adjustment sets ed effetti
+
+## Backdoor paths e ajdustment set
+
+Essenzialmente il metodo del **backdoor path** ci consente di chiudere tutti i percorsi non causali che portano la nostra exposure (X) alla nosta outcome (Y), consentendoci di ottenere una stima causale non distorta di X.
+Il metodo si compone di tre punti:
+
+1. Elencare tutti i percorsi (causali e non) che collegano le due varabili. Tutti i percorsi che hanno frecce che puntano su X sono backdoor path e vanno chiusi.
+
+2. Per ogni percorso valutare se risulta aperto o chiuso di default e identificare le possibili variabili che chiuderebbero il percorso. 
+
+3. Dal punto precedente selezionare un gruppo di variabili che chiuda tutti i backdoor paths. 
+
+Il gruppo di suddette variabili è definito **adjustment set**. Sono possibili più adjustment set per uno stesso DAG. 
+ 
+Costruiamo un DAG un po' più complesso per capire meglio come funzionano il backdoor path e gli adjustment set:
+```{r}
+dag2 <- dagify(
+  Y ~ X+Z+C+B,
+  Z ~ A+B,
+  X ~ A+C+Z, 
+    coords = list(
+    x = c(X = 0, Y = 2, A = 0, C = 1, Z = 1, B = 2),
+    y = c(X = 0, Y = 0, A = 1, C = -1, Z = 1, B = 1)
+  )
+) 
+
+ggdag(dag2) + theme_dag()
+```
+
+Nel dichiarare il nostro DAG con la funzione `dagify()` possiamo aggiungere anche informazioni sullo stato delle variabili, ovvero qual è la nostra exposure (il nostro trattamento, X) e la nostra outcome (la nostra variabile di interesse, Y) e quali sono le variabili latent (non misurate, le vedremo dopo).
+Quindi ora costruiamo lo stesso DAG indicando che vogliamo scoprire che influenza ha X (exposure) sulla variabile Y (outcome). Lo possiamo indicare così: 
+```{r}
+dag2 <- dagify(
+  Y ~ X+Z+C+B,
+  Z ~ A+B,
+  X ~ A+C+Z, 
+  exposure = "X", # definisco la X (trattamento)
+  outcome = "Y",  # definisco la Y (variabile dipendente)
+    coords = list(
+    x = c(X = 0, Y = 2, A = 0, C = 1, Z = 1, B = 2),
+    y = c(X = 0, Y = 0, A = 1, C = -1, Z = 1, B = 1)
+  )
+) 
+```
+
+per visualizzare anche lo stato delle variabili dobbiamo usare la funzione `ggdag_status()`:
+```{r}
+ggdag_status(dag2)
+```
+
+Ora X ed Y sono indicate a colori, con la legenda a fianco. Tutte le altre variabili sono le *variabili di controllo* che possono essere incluse o meno per chiudere i backdoor paths.
+
+Possiamo anche vedere tutti i percorsi che collegano le nostre due variabili con la funzione e se sono aperto o meno con la funzione:
+```{r}
+paths(dag2) %>% as.data.frame()
+```
+questo grafico indica i percorsi aperti di default: vuol dire che se io facessi una semplice regressione `y~x` senza includere alcuna covariata, i percorsi sarebbero chiusi o aperti come indicato nel data-frame.
 
 
+Possiamo visualizzare i pathway _aperti_ con `ggdag_paths()` (non c'è la possibilità di vedere i pathway chiusi...):
+```{r}
+ggdag_paths(dag2)
+```
 
+notiamo che nel grafico i percorsi dal 2 al 5 sono backdoor paths. Per ottenere una corretta stima dell'influenza di X su Y dovremmo stratisicare per variabili che chiudano questi percorsi. Nel caso di 3 possiamo stratificare per C, mentre ne caso di 4 potremmo stratificare per Z. Stratificando per Z dovremmo anche chiudere i path 2 e 5. Proviamo a vedere cosa succede se stratifichiamo per C e per Z con la funzione `ggdag_adjust()`:
+
+```{r}
+ggdag_adjust(dag2,  var = c("C", "Z"))
+```
+
+Z funge da collider tra A e B. Stratificando per Z abbiamo chiuso i percorsi 2, 4 e 5, ma al contempo abbiamo aperto (linee tratteggiate) il collider e ora il flusso associativo X-A-Z-B-Y è aperto. Per chiudere Quel path dovremmo stratificare per A, per B o per entrambi. La scelta migliore è stratificare per B (è più vicino alla variabile dipendente). 
+
+Riproviamo:
+```{r}
+ggdag_adjust(dag2,  var = c("C", "Z", "B"))
+```
+
+sebbene nel grafico A e B siano ancora associati, stratidicare per B blocca la via per Y (freccia grigia) bloccando il flusso associativo. Quindi gli unici path aperti sono quelli che collegano causalmente X con Y. Testiamolo con `ggdag_paths()` che ricordo mostra solo i pathway aperti tra X e Y:
+```{r}
+ggdag_paths(dag2, adjust_for = c("C", "Z", "B"))
+```
+cvd.
+
+Quindi possiamo dire che {B, C, Z} è un adjustment set del dag.
+Verifichiamolo con la funzione `ggdag_adjustment_set()`
+
+```{r}
+ggdag_adjustment_set(dag2)
+```
+
+`ggdag` è d'accordo con noi; inoltre, ci fornisce anche un altro adjustment set. Infatti, possiamo anche stratificare per A al posto di B volendo, ma è meglio usare sempre la variabile più vicino alla nostra outcome se abbiamo possibilità di scegliere. 
+
+Ma cosa succederebbe se Z fosse una variabile non-misurata? vediamo:
+```{r}
+dag2 <- `latents<-`(dag2, "Z") # Faccio dicentare Z una variabile latente
+# alternativamente posso aggiungere ` latent = "Z" ` nella dichiarazione del DAG con dagify()
+
+ggdag_adjustment_set(dag2)
+```
+
+R ci restituisce un messaggio di warning che ci dice che non è stato possibile chiudere tutti i backdoor paths. Se non conoscessimo il valore di Z, per noi sarebbe possibile ottenere solo una stima distorta dell'effetto di X su Y. 
+
+## Effetti totali e diretti & coefficienti
+
+Prendiamo in considerazione un DAG più semplice:
+
+```{r}
+dag4 <- dagify(
+  Y~X+M+Z,
+  Z~X,
+  M~X,
+  exposure = "X",
+  outcome = "Y"
+)
+ggdag_status(dag4)
+```
+
+abbiamo due pipe e un collegamento diretto tra X e Y. Tutti questi rapporti sono causali. Vediamo gli adjustment set:
+```{r}
+ggdag_adjustment_set(dag4)
+```
+
+R ci dice che i backdoor path sono sempre chiusi, infatti non abbiamo frecce rivolte verso X, pertanto non dobbiamo condizionare per nessuna variabile. Tuttavia noi stiamo in questo momento guardando gli **effetti totali** che la variabile X ha sulla variabile Y, quindi stiamo tenendo conto anche degli effetti mediati dalle variabili Z e M. Tuttavia possiamo chiedere ad R anche quali siano gli adjustment set per vedere solo l'**effetto diretto** che la variabile X ha su Y:
+```{r}
+ggdag_adjustment_set(dag4, effect = "direct")
+```
+
+in questo caso R ci dice che dobiamo condizionare sia per Z che per M, bloccando il flusso associativo mediato da queste due variabili verso Y. 
+Potremmo essere interessati anche a rimuovere solo una delle due variabili, per studiare l'effetto diretto e quello mediato ad esempio da M. In questo caso R non ha una funzione pronta, ma possiamo verificare che il nostro adjustment set sia corretto sempre con la funzione `ggdag_adjust()`:
+```{r}
+ggdag_adjust(dag4, var = "Z")
+```
+
+il path di Z è bloccato e quindi ci consente di vedere l'influenza diretta di X più quella mediata da M.
+
+E se io volessi spiegare solo l'effetto di Z invece che di X? Posso cambiare sia l'exposure e l'outcome nelle funzioni:
+```{r}
+ggdag_adjustment_set(dag4, exposure = "Z", outcome = "Y")
+```
+
+dovrei stratificare per X, ottenendo il set di covariate {X, Z}. Questo set di covariate sono le stesse dell'esempio precedente, ad indicare come mentre il coefficiente di X spiega l'influenza complessiva di X e M, il coefficiente di Z indica l'effetto diretto di Z su Y. 
+
+Tutti i coefficienti in base alle altre covariate utilizzate possono avere significati diversi. Possono rappresentari veri e propri effetti causali, totali, parziali o diretti, come possono non aver alcun significato. Infatti, spesso in DAG complessi una covariata viene aggiunta solo per chiudere flussi associativi, non perché il suo coefficiente abbia significato descrittivo del fenomeno (anche se significativo). 
+
+## Esempio: ancora piante e funghi
+
+Riprendiamo l'esempio di prima dei trattamenti antifungini. è stato scoperto un nuovo trattamento che sembra performare meglio del primo. I dati sono contenuti nel data-frame `fungus1`. Stavolta prima di addentrarci nell'analisi costruiamo il DAG. Differentemente dall'altra volta in questo caso si suppone che il trattamento abbia un'influenza sulla crescita della pianta. 
+
+Pertanto il DAG diventa:
+
+```{r}
+dag_fungus1 <- dagify(
+  h1 ~ h0 + F + T,
+  F ~ T,
+  exposure = "T",
+  outcome = "h1"
+)
+
+ggdag_status(dag_fungus1) + theme_dag()
+```
+
+In questo caso treatment (`T`) è l'exposure perché siamo interessati a vedere come influenza l'altezza finale (`h1`) che è la nostra outcome. 
+
+Vediamo i percorsi possibili che collegano la nostra exposure alla nostra outcome:
+```{r}
+paths(dag_fungus1) %>% data.frame()
+```
+
+Ce ne sono due ed entrambi sono aperti per default (significa che se eseguo una regressione lineare `h1~T`, i flussi associativi di entrambi i path sono aperti e influenzano il valroe del coefficiente di `T`). Tra l'altro sono entrambi path causali: una causa diretta ed una pipe. 
+
+Ora vediamo che faccia hanno i dati:
+```{r}
+fungus1 %>% head()
+```
+sono strutturati esattamente come l'esempio precedente. 
+
+### effetti totali e diretti del trattamento
+
+Ora vogliamo calcolare l'effetto totale che il trattamento ha sul fungo. Usiamo quindi la funzione.:
+```{r}
+ggdag_adjustment_set(dag_fungus1, effect = "total")
+```
+che ci dice che non dobbiamo includere alcuna variabile all'infuori delle interessate per avere una corretta stima dell'influenza causale di `T` su `h1` (nessun nodo è diventato quadrato). In sostanza ci dice di lasciare aperta la pipe, per far sì che l'influenza causale scorra anche attraverso quel percorso causale. 
+
+Attenzione però che la funzione non tiene conto dei descendant come `h0`! Pertanto i ragionamenti sui descendant spettano a noi. Abbiamo già visto che in questo caso `h0` aiuta la corretta stima e quindi lo includeremo.
+
+```{r}
+lm(data = fungus1, h1 ~ h0 + treatment) %>% summary()
+```
+
+tutto significativo! In questo caso il trattamento ha un impatto positivo doppio (confrontate i coefficienti con lo scorso esempio) nei confronti della crescita. 
+
+Come ricercatore però sono anche interessato a valutare l'impatto diretto che il mio trattamento ha sulla pianta. In altre parole, voglio sapere se ha un effetto benefico, ad esempio biostimolante, indipendentemente dalla presenza del fungo. In questo caso ho bisogno di calcolare l'effetto diretto del mio trattamento. Dato il DAG posso trovare l'adjustment set con:
+
+```{r}
+ggdag_adjustment_set(dag_fungus1, effect = "direct")
+```
+
+Per vedere l'effetto diretto in questo caso è necessario stratificare per la presenza del fungo in modo da chiudere il flusso associativo della pipe per lasciare aperto solamente quello tra `T` e `h1`. 
+
+Procediamo dunque con la regressione lineare:
+```{r}
+lm(data = fungus1, h1 ~  treatment + fungus + h0 ) %>% summary()
+```
+
+tutto significativo: il trattamento in questo caso favorisce la crescita della pianta anche senza influenzare la presenza del fungo; in ipotesi potrebbe avere un effetto biostimolante oppure fornire nutrienti aggiuntivi che la pianta è capace di utilizzare. 
+
+### effetti totali e diretti del fungo
+
+Ma cambiamo un attimo prospettiva. E se io fossi interessato a capire l'effetto del fungo sulla crescita? Posso farlo cambiando focus nel DAG su cos'è l'exposure e l'outcome. In questo caso, voglio che la mia exposure sia la presenza o meno del fungo e cerco l'adjustment set per l'effetto totale:
+```{r}
+set.seed(1) # riproducibilità dei numeri casuali e quindi delle coordinate del dag
+ggdag_adjustment_set(dag_fungus1, exposure = "F", effect = "total")
+```
+
+e per l'effetto diretto:
+```{r}
+set.seed(1)
+ggdag_adjustment_set(dag_fungus1, exposure = "F", effect = "direct")
+```
+
+
+Da notare che in questo caso effetto diretto e totale coincidono: l'unico path che collega causalmente `F` con `h1` è un path causale diretto. 
+
+Passando all'adjustment set, devo stratificare per `T`, e ancora una volta per `h0` per i motivi già citati riguardo il descendant. Ma un momento... quindi userei le stesse covariate che ho usato per stimare l'effetto diretto del trattamento. In altre parole, il coefficiente del fungo in quella regressione rappresenta anche l'effetto diretto e totale del fungo sulla crescita della pianta. Non ci sorprende che esso abbia coefficiente negativo, infatti limita lo sviluppo della stessa. 
+
+### Approfondimento: primo esempio fungus
+
+La prima volta che ho usato questo esempio del fungo, vi ho detto io che il trattamento non influiva sulla crescita della pianta. In altre parole vi ho detto che non c'erano effetti diretti tra il trattamento e l'altezza finale. L'ho fatto per passare più facilmente il concetto della pipe, ma ora possiamo riguardare l'esempio con altri occhi. Supponiamo di non sapere se il trattamento influisca o meno sulla cresita. Il DAG più plausibile è quello che abbiamo usato ora:
+```{r}
+ggdag_status(dag_fungus1)
+```
+in cui supponiamo che vi possa essere un'interazione diretta. Sappiamo che con questo DAG se vogliamo misurare l'effetto totale di `T` non dobbiamo includere `F` come covariata, se invece vogliamo misurare l'effetto totale, dobbiamo includere `T`. 
+
+Quindi, facendo la regressione con i dati `fungus` otteniamo:
+```{r}
+fungus %>% lm(data = ., h1 ~ h0 + fungus + treatment) %>% summary()
+```
+
+In cui `fungus` ha coefficiente negativo (vi ricordo che misura la sua influenza diretta sulla crescita), mentre `treatment` ha coefficiente non significativo. Quel coefficiente sappiamo che indica l'effetto diretto del trattamento sulla crescita. Quindi in questo caso non possiamo rifiutare l'ipotesi nulla e quindi l'influenza del trattamento sulla crescita potrebbe essere zero, che  è la stessa cosa di dire che non c'è la freccia che collega `T` ad `h1`. 
+
+### funghi e variabili ignote
+
+Supponiamo ora che dopo aver fatto l'esperimento ci rendessimo conto di non aver misurato i nutrienti nel terreno. Questi influenzano sia la crescita della pianta, sia la risposta del fungo al trattamento; più nutrienti ci sono più sarà facile per il fungo sopravvivere e allo stesso tempo la pianta crescerà meglio.
+
+Il dag che ne emerge è il seguente:
+
+```{r}
+dag_fungus2 <- dagify(
+  h1 ~ h0 + F + T + U,
+  F ~ T + U,
+  exposure = "T",
+  outcome = "h1",
+  latent = "U"
+)
+set.seed(1)
+ggdag_status(dag_fungus2)
+```
+
+`U` indica i nutrienti (di solito le variabili latenti vengono indicate con la lettera U); è una fork su `h1` e `F`. Vediamo ora come introducendo questa variabile cambiano i nostri risultati. Guardiamo innanzitutto i percorsi che ora collegano `T` a `h1`:
+```{r}
+paths(dag_fungus2) %>% data.frame()
+```
+
+sono diventati 3, con uno passante per `U`, chiuso di default a causa del collider su `F`. 
+
+Questo potrebbe creare dei problemi. Proviamo a trovare l'adjustment set per gli effetti totali del trattamento:
+```{r}
+ggdag_adjustment_set(dag_fungus2, effect = "total")
+```
+è lo stesso di prima. Proviamo con gli effetti diretti del trattamento:
+```{r}
+ggdag_adjustment_set(dag_fungus2, effect = "direct")
+```
+oltre al grafico ggdag ci restituisce un messaggio di avvertimento in cui ci dice che non è riuscito a chiudere tutti i backdoor paths! Quindi non è possibile per noi stimare senza bias l'effetto diretto del trattamento sulla crescita. Bisognerebbe avere i dati sui nutrienti per farlo. 
+
+Se cerchiamo di stimare l'effetto del fungo, troveremo lo stesso avvertimento sia per gli effetti totali che per quelli diretti:
+
+```{r}
+ggdag_adjustment_set(dag_fungus2, exposure = "F", effect = "total")
+ggdag_adjustment_set(dag_fungus2, exposure = "F", effect = "direct")
+```
+
+indicandoci che non è possibile stimare senza bias né l'uno né l'altro. NB: ciò non significa che i coefficienti debbano essere per forza non significativi, significa anche che il loro valore può essere distorto; con l'esempio di adesso quel -4 che abbiamo ottenuto potrebbe essere diverso, ma non sappiamo come: potrebbe avere un effetto dannoso maggiore (-5, -6) o minore (-3, -2). Non possiamo saperlo. Condividerlo però ci aiuta ad essere trasparenti e ad evitare errori di valutazione. 
+
+## Uccelli, rapaci e... topolini
+
+I dati all'interno del data-frame `eggs` raccolgono cinquant'anni di dati relativi al numero medio di una determinata specie di piccoli uccelli e al numero di uova deposte da quella specie quell'anno. Insieme a questo sono stati raccolti dati sulla popolazione di rapaci, serpenti e topi presenti nella zona.
+```{r}
+eggs
+```
+Sappiamo che i rapaci predano la specie di uccelli di nostro interesse; inltre sappiamo che anche la popolazione di serpenti influenza il numero di uova. La popolazione di topi è influenzata sia dai rapaci sia dai serpenti. Il nostro scopo è cercare di capire l'influenza delle uova sulla popolazione di uccelli. 
+
+Purtoppo, i dati sulla popolazione di serpenti e rapaci vengono persi e pertanto non sono più disponibili... Il DAG che ne consegue è il seguente:
+
+```{r}
+dag_uova <- dagify(
+  B ~ E + R,  
+  E ~ S,
+  # S ~ R,
+  T ~ R + S,
+  exposure = "E",
+  outcome = "B", 
+  latent = c("R", "S")
+) 
+set.seed(1)
+ggdag_status(dag_uova)
+```
+
+Vediamo i paths:
+```{r}
+paths(dag_uova) %>% data.frame()
+```
+
+abbiamo due path: uno causale diretto e uno non causale (backdor) chiuso. Già a occhio possiamo concludere che non ci serve nulla come adjustment set, perché tutti i backdoor paths sono chiusi. Verifichiamolo lo stesso:
+```{r}
+ggdag_adjustment_set(dag_uova)
+```
+cvd.
+
+Eseguiamo quindi la regressione:
+```{r}
+eggs %>% lm(data = ., birds~eggs) %>% summary()
+```
+
+coefficiente significativo con valore di 0.63. Il valore reale con cui sono stati generati i dati è di 0.7. Direi che siamo abbastanza vicini.
+
+Se inserissimo anche la popolazione di topi nella regressione, ne risulterebbe l'apertura del collider, con una conseguente distorsione della stima. Vediamo se è vero:
+
+```{r}
+eggs %>% lm(data = ., birds~eggs + mice) %>% summary()
+```
+
+il valore è ancora significativo, ma la stima del coefficiente si è allontanata dal valore vero di 0.7. Inoltre il coefficiente della variabile `mice` in questo caso non ha alcun significato. 
+
+### stime sempre biased
+
+Tuttavia non abbiamo considerato un'altro fattore: che la popolazione dei serpenti potrebbe essere influenzata dai rapaci. Il DAG diventa quindi:
+
+```{r}
+dag_uova1 <- dagify(
+  B ~ E + R,  
+  E ~ S,
+  S ~ R,
+  T ~ R + S,
+  exposure = "E",
+  outcome = "B", 
+  latent = c("R", "S")
+) 
+set.seed(1)
+ggdag_status(dag_uova1)
+```
+
+questo aggiunge un nuovo path aperto tra `B` ed `E`:
+```{r}
+paths(dag_uova1) %>% data.frame()
+```
+
+Non solo, con i dati che abbiamo non ci è possibile chiudere questo nuovo path:
+```{r}
+ggdag_adjustment_set(dag_uova1)
+```
+
+questo ci indica che con i dati che abbiamo possiamo ottenere solo una stima distorta dell'influenza delle uova sulla popolazione di uccelli. Per di più, se in questo caso usassimo la variabile `mice`, apriremmo un ulteriore backdoor path, senza chiudere il precedente, rendendo la stima ancora più distorta di quello che è. 
+
+```{r}
+paths(dag_uova1, Z = "T") %>% data.frame()
+```
+
+In somma sintesi in base al DAG che scegliamo di usare possiamo avere una stima distorta o meno della variabile `eggs`. Quale dei due DAG dobbiamo considerare? La scelta sta a voi. Io preferirei il secondo; preferisco affermare che una stima potrebbe essere biased piuttosto che dare la certezza sulla stima. Ma di per sé potreste presentare anche entrambi i DAG e descrivere le conseguenze di sceglierne uno piuttosto che l'altro. La trasparenza è sempre la miglior soluzione in scienza, a mio avviso. 
+
+### Riflessioni
+
+Abbiamo visto come assumere un DAG (in altre parole un modello causale) dietro quello che stiamo descrivendo è molto utile per capire come analizzare al meglio i dati. Attraverso i DAG possiamo rimuovere l'influenza delle altre variabili sul nostro effetto causale di interesse (attraverso gli adjustment set) e ci consentono di selezionare le variabili per stimare sia gli effetti totali che gli effetti diretti del nostro trattamento. 
+
+Abbiamo anche visto però che questo non è sempre possibile a volte a causa della mancanza di dati che rendono impossibile chiudere i backdoor paths, il che potrebbe rendere la nostra stima perennemente distorta. Tuttavia, sapere che la nostra stima è distorta ci può aiutare nella comprensione del fenomeno, nell'aggiustare il design sperimentale e a prendere maggiormente con le pinze i valori trovati. 
+
+Abbiamo anche visto che cambiando la struttura del DAG, specialmente quando introduciamo variabili non misurate o introduciamo altre relazioni che prima non avevamo considerato, è possibile intrpretare diversamente le stime trovate. La domanda sorge spontantea: qual è allora il DAG giusto? Non c'è un DAG giusto o sbagliato. Come ogni aspetto legato alla scienza, quello che possiamo fare è dare la nostra interpetazione del fenomeno al meglio delle conoscenze che abbiamo, e di conseguenza cercare di dedurne il più probabile DAG. Questo vuol dire trasparenza sulle assunzioni e sule stime che ne derivano. Personalmente preferisco l'approccio più conservativo di inserire tutti i confounder che posso trovare e piuttosto essere in dubbio se la stima è distorta piuttosto che dare la certezza su una stima possibilmente errata. 
+
+
+#### README
+
+Se qualcosa non fosse abbastanza chiaro scrivetemi pure all'indirizzo: 
+
+matteo.migliorini@univr.it 
+
+o aprite una issue su git-hub(?). Alternativamente potete venirmi a trovare; il mio ufficio è di fianco a quello del Prof. Chignola (cv1, ultimo piano, corridoio di sinistra, ultima porta sulla destra, stanza 2.02). 
+
+Buono studio e buoni esami :)
 
 
 
