@@ -1,0 +1,930 @@
+---
+title: "Welcome to the Tidyverse"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Set-up - carichiamo i pacchetti
+
+## Tidyverse
+
+Come prima cosa carichiamo il pacchetto tidyverse:
+```{r}
+library(tidyverse)
+```
+Come vedete il pacchetto è in realtà un pacchetto di pacchetti. Quando caricate tidyverse in realtà state caricando tutti i pacchetti sottostanti. Alcuni li conoscete già come `ggplot2`. 
+Nella sezione conflicts vi avverte che ci sono delle funzioni da pacchetti differenti hanno lo stesso nome. Ora se usassimo la funzione `filter()` non richiameremmo la funzione dal pacchetto stats, ma quella dal pacchetto `dplyr`. 
+Curiosità: per essere sicuri di usare la funzione dal pacchetto giusto possiamo usare la notazione `pacchetto::funzione()`. 
+
+## Penguins
+
+Il secondo pacchetto che useremo sarà `palmerpenguins`, è un pacchetto di dati (contiene solo dati non funzioni). 
+
+```{r}
+library(palmerpenguins)
+```
+Questo ci da accesso al dataframe `penguins`, che sono dati relativi a un campione di tre diverse specie di pinguini abitanti l'arcipelago Palmer in Antartide:
+
+```{r echo=TRUE, include=TRUE}
+penguins
+```
+
+bene, ora con i dati alla mano vediamo cosa possiamo fare con il tidyverse!
+
+# Pipe e short-cuts
+
+## Pipe
+
+Prima di iniziare è bene conoscere certe short-cut che ci consentono di lavorare meglio e più velocemente con R. 
+
+La prima funzione che vediamo è la pipe (`%>%` oppure `|>`). La pipe è una funzione che ci consente di utilizzare al meglio le funzioni del tidyverse, ma in generale anche R. All'inizio è un po' controintuitiva, ma una volta capito come funziona facilita notevolmente la nostra vita. 
+
+Come funziona? La pipe passa l'oggetto che sta alla sua sinistra (che può essere un dataframe, un array, ecc.) alla funzione che sta alla sua destra come primo argomento della stessa. Vediamo un esempio con la funzione `mean()`. 
+Con R normale per calcolare la media di un vettore devo scrivere prima la funzione poi i dati:
+```{r}
+mean( c(1,4,6,7,3) )
+```
+
+Con la pipe scrivo prima i dati e poi la funzione che voglio applicargli:
+
+```{r}
+c(1,4,6,7,3) %>% mean()
+```
+Non cambia molto voi direte. In realtà, se ci pensate se devo applicare una serie di funzioni ai miei dati con R ho due scelte: o applico le funzioni aggiungendo continuamente prefissi ai miei dati o creo una serie di dummy variables a cui continuo ad applicare le mie funzioni, sprecando memoria. Ad esempio, se al mio array volessi:
+
+1. normalizzare
+2. elevare e alla x potenza 
+3. calcolare la media
+
+```{r}
+mean( exp( scale( c(1, 4, 6, 7, 3) ) ) )
+```
+con R normale se volessi fare tutto in un passaggio ottengo una serie di funzioni e tante parentesi tonde che non so più a quale funzione appartengano. Inoltre non ho spazio per commenti ed è difficile interpretare il codice in un secondo tempo.
+
+Con la pipe il tutto diventa molto più intuitivo:
+```{r}
+c(1, 4, 6, 7, 3) %>% # prendo il vettore e lo passo alla funzione scale
+  scale() %>% # il risultato lo passo alla funzione exp
+  exp() %>% # il risultato lo passo alla funzione mean
+  mean()
+```
+il tutto può anche essere messo in una singola riga, ma se c'è bisogno di fare più di una operazione è meglio andare a capo (il codice viene più ordinato). Il vantaggio principale di lavorare con la pipe infatti è che ci consente di lavorare con un approccio progressivo invece che ricorsivo.
+
+
+Nota Bene: il primo argomento di tutte le fuznioni usate sono appunto array di dati. Non sempre è così. Ad esempio la funzione `lm()` come primo argomento prende la formula, non i dati. Se passo i dati a `lm()` con la pipe mi darà errore:
+
+```
+data.frame(x = c(1,2,3,4,5), y = c(2.1,3.1,4,4.9,6)) %>% 
+  lm(y~x) # restituisce errore
+```
+In questo caso dovrò specificare dove i miei dati vanno inseriti con il punto `.` :
+```{r}
+data.frame(x = c(1,2,3,4,5), y = c(2.1,3.1,4,4.9,6)) %>% 
+  lm(data = ., formula = y~x) # in questo modo non restituisce errore e dà il risultato che voglio
+```
+E se volessi direttamente il summary:
+```{r}
+data.frame(x = c(1,2,3,4,5), y = c(2.1,3.1,4,4.9,6)) %>% 
+  lm(data = ., formula = y~x) %>% 
+  summary()
+```
+
+## Short cuts
+
+Ci sono dei comandi rapidi da tastiera per agevolare l'utilizzo di R:
+
+- F1 --> aiuto sulla funzione in cui è il cursore
+
+- Tab --> completamento automatico/suggerimenti
+
+- Ctrl/Cmd + Shift + M  --> Inserisci una pipe ( %>% )
+
+- Ctrl/Cmd + Invio  --> Esegue la riga in cui sta il cursore (e le righe collegate) o il codice selezionato
+
+- Ctrl/Cmd + Shift + Invio  --> Esegue tutto il chunk in cui è il cursore
+
+-	Ctrl+Alt+I / Cmd+Option+I  --> Inserisce un nuovo chunk dov'è il cursore
+
+- Ctrl/Cmd + Shift + F10  --> Restart R (NB: dovrò ricaricare tutti i pacchetti)
+
+In particolare il comando rapido per le pipe e quello dell'esecuzione del codice se usati insieme sono molto potenti.
+
+# Tidying the data
+
+Diamo un occhio ai dati. Il tidyverse è ottimizzato per lavorare con i data.frame, o meglio con le tibble che sono praticamente equivalenti ai data frame. Con la funzione `glimpse()` possiamo visulaizzare velocemente tutte le colonne e il tipo di dato contenuto in esse.
+
+```{r}
+penguins %>% glimpse()
+```
+con questa funzione possiamo velocemente capire se alcune colonne necessitano di modifiche. Ad esempio, se ho una colonna di dati numerici che è segnata come colonna di caratteri so già che c'è qualcosa che non va e andrà sistemato.
+
+### Filter
+
+Vediamo come le prime due colonne sono variabili categoriche (factor), le seconde due sono numeri con cifra decimale, poi due colonne di numeri interi, ecc. A occhio notiamo che ci sono anche NA nei dati... Potrebbero essere un problema per alcune analisi. Vediamo quali sono le righe problematiche con il comando `filter()`:
+
+```{r}
+penguins %>% 
+  # tienimi tutte le righe che hanno NA, ovvero che non (! = operatore NOT) sono casi completi 
+  filter(! complete.cases(.))
+```
+
+`filter()` è una funzione potente che ci consente di selezionare le righe in base a criteri sulle variabili del dataframe. Ad esempio possiamo selezionare tutti i pinguini che abitano una determinata isola e hanno un becco con una lunghezza maggiore di 40 mm. La virgola all'interno della funzione funge da operatore AND &. All'interno della funzione possiamo inserire anche altri operatori logici come l'operatore OR |. 
+Possiamo usare anche la funzione `%in%` che equivale all'operatore `==` solo che ci consente di avere più valori possibili per l'uguaglianza (in altre parole "selezionami le righe che contengono almeno uno dei valori").
+
+```{r}
+penguins %>% 
+  # tienimi i pinguini che sono presenti nell'isola Dream e che hanno un becco più lungo di 40 mm. 
+  filter(island == "Dream") %>% 
+  filter(bill_length_mm > 40) %>% 
+  # oppure posso scriverli insieame
+  # filter(island == "Dream", bill_length_mm > 40 ) 
+  # la virgola funge da operatore logico AND
+  
+  # Ora tienimi solo i pinguini dell'anno 2007 o 2009 
+  filter(year %in% c(2007, 2009))
+  # che equivale a 
+  # filter(year == 2007 | year == 2009)
+
+
+```
+
+NB: da notare che non appena comincio a scrivere il nome delle colonne del mio dataframe dopo la pipe R mi suggerisce i titoli! Anche cliccando il tasto Tab ⇆ ottengo i suggerimenti di tutte le colonne presenti nel dataframe e posso selezionare quella di interesse (o cliccare nuovamente Tab). 
+
+Con `filter()` sono utili anche le funzioni `str_`, come `str_detect()` che identifica tutte le righe che contengono un determinato pattern di caratteri:
+
+```{r}
+penguins %>% 
+  # tienimi tutte le righe cha hanno un'isola che contiene "s" nel nome
+  filter(str_detect(island, "s"))
+```
+
+Approfondimento: la funzione `filter()` deve contenere al suo interno alla fine della computazione degli argomenti un vettore di TRUE/FALSE con lunghezza equivalente al numero di righe del dataframe. 
+La funzione poi eliminerà tutte le righe corrispondenti ai FALSE. Se ci pensate quando io pongo una colonna uguale ad un determinato valore in R (ad esempio `penguins$island == "Dream"`) R mi restituisce un vettore di TRUE/FALSE. Allo stesso modo `str_detect()` in R base mi restituisce un valore di TRUE/FALSE. Quindi dentro filter posso inserire qualsiasi condizione basta che alla fine ottenga un vettore di TRUE/FALSE con lunghezza pari al numero di righe del dataframe.
+
+### Mutate
+
+Notiamo inoltre che non c'è un ID che identifichi univocamente un determinato pinguino e vorremmo aggiungerlo. La funzione `mutate()` ci consente di modificare il dataframe aggiungendo o modificando le colonne. In questo caso vogliamo aggiungere una colonna chiamiata ID con codice alfanumerico "p###" dove # è n numero. 
+
+```{r}
+penguins %>% 
+  mutate( # alla colonna ID assegni questo. Se non è presente nel dataframe la aggiungi, se è presente la modifichi
+    # str_pad() crea una stringa con gli elementi del primo elemento (da 1 a n() che è la lunghezza del dataframe), di una lunghezza pari a width (3) e riempe gli spazi vuoti con pad (in questo caso zeri)
+    # paste() unisce due stringhe. sep è la stringa che viene interposta tra le stringhe, nel nostro caso non vogliamo separazione
+    ID = paste("p", str_pad(1:n(), width = 3, pad = "0"), sep = ""), .before = species
+    ) 
+```
+
+da notare che il dataframe penguins non si salva con la pipe. In caso dobbiamo fare noi l'assegnazione. Il suggerimento che io do è fare un dataframe il più completo possibile e salvarlo in memoria, da questo poi è facile selezionare le informazioni che ci servono di volta in volta. 
+
+Salviamo quindi penguins modificato nella variabile p1:
+
+```{r}
+p1 <- penguins %>% 
+  mutate( 
+    ID = paste("p", str_pad(1:n(), 3, pad = "0"), sep = ""), .before = species
+    ) 
+```
+
+`mutate()` mi consente di modificare anche le colonne esistenti. Ad esempio, se voglio modificare la colonna flipper_length assegnandole valore "alto" se ha un valore maggiore-uguale a 197 o "basso" nell'altro caso posso fare così:
+
+```{r}
+penguins %>% 
+  # modifica il dataframe
+  mutate(
+    # modifica la colonna flipper length
+    flipper_length_mm = ifelse(flipper_length_mm>=197, # test
+                               "alto", # valore assegnato se vero
+                               "basso" # valore assegnato se falso
+                               )
+  )
+```
+
+
+### Rename()
+
+La funzione rename ci consente di rinominare le colonne:
+
+```{r}
+p1 %>% 
+  rename(# nuovo nome = nome colonna,
+         bl = bill_length_mm, 
+         bd = bill_depth_mm,
+         fl = flipper_length_mm,
+         m = body_mass_g)
+```
+
+particolarmente utile quando nel dataframe di partenza ci sono nomi composti o lunghi.
+
+### Drop_na() 
+ 
+Per rimuovere gli NA possiamo usare la funzione `drop_na()`. Lasciandola senza argomenti la funzione rimuoverà tutte le righe con almeno un NA in una qualsiasi colonna. Indicando la/e colonna/e rimuove le righe con NA solo in quelle colonne.
+
+```{r} 
+p1 %>% nrow()
+p1 %>% drop_na() %>% nrow()
+p1 %>% drop_na(bill_length_mm) %>% nrow()
+p1 %>% drop_na(sex, body_mass_g) %>% nrow()
+```
+
+### rownames_to_column() e column_to_rownames()
+
+Le funzioni `rownames_to_column()` e `column_to_rownames()` ci consentono di trasformare i nomi delle righe del dataframe in colonne e viceversa. Ad esempio:
+```{r}
+p1 %>% 
+  # assegna ai nomi delle righe i valori della colonna ID e rimuovi la colonna ID
+  column_to_rownames("ID")
+```
+con questo codice ho rimosso la colonna ID, ma tutti i valori al suo interno sono diventati i nomi dele righe del datarfame. Ora faccio l'operazione inversa:
+```{r}
+p1 %>% 
+  column_to_rownames("ID") %>% 
+  # prendi i nomi delle righe e assegnali ad una nuova colonna chiamata newvar
+  rownames_to_column("newvar")
+```
+
+In che contesto queste funzioni possono tornarci utili? Immaginiamo di dover calcolare la correlazione tra tutte le veriabili numeriche del dataframe. Per prima cosa dobbiamo selezionare solo le colonne contenenti valori numerici. Per farlo possiamo usare la funzione `where()` all'interno di `select()`. Tale funziona seleziona tutte le colonne che rispettano una determinata condizione, ad esempio con `is.numeric` (NB: non vanno scritte le parentesi tonde) selezioniamo tutte le colonne numeriche, con `is.character` selezioniamo tutte le colonne contenenti testo, con `is.factor` tutte le colonne con fattori, etc. Poi dobbiamo calcolare la correlazione e infine costruire il grafico con i risultati. Per costruire il grafico useremo la funzione ggplot, che vedremo nel dettaglio fra poco.
+
+```{r}
+p1 %>% 
+  # seleziono solo le colonne numeriche
+  select(
+    where(is.numeric), # selezionami le colonne numeriche
+    - year             # rimuovi la colonna year (è numerica, ma non la voglio)
+    ) %>% 
+  # rimuovi tutte le righe con NA
+  drop_na() %>% 
+  # calcola la correlazione
+  cor() %>% 
+  # cor restituisce una matrice; la trasformo in un data.frame
+  data.frame() %>% 
+  
+  # grafico 
+  ggplot(aes(1:4, body_mass_g)) + geom_col()
+```
+
+ok abbiamo ottenuto un grafico, ma non sappiamo cosa è cosa nelle ascisse. Se eseguiamo il codice fino a cor() notiamo che i nomi delle variabili con cui è stata calcolata la correlazione ci sono, ma sono rownames. Qui ci viene in aiuto la funzione `rownames_to_column()`. Infatti, se la inserico prima di costruire il grafico e assegno i nomi delle righe ad una variabile "variable" posso plottare il grafico precedente indicando sulle ascisse cosa è cosa:
+```{r}
+p1 %>% 
+  select(where(is.numeric), - year) %>% 
+  drop_na() %>% 
+  cor() %>% 
+  data.frame() %>% 
+  rownames_to_column(var = "variable") %>% 
+  ggplot(aes(variable, body_mass_g)) + geom_col()
+```
+
+# ggplot()
+
+Ora prima di continuare a capire come modificare e lavorare con i dataframe usando il tidyverse, dobbiamo capire come funziona il pacchetto `ggplot2`. Il pacchetto fornisce una serie di funzioni che ci consentono di costruire grafici in maniera semplice, ma allo stesso tempo mantenendo un'ottimo controllo sull'aspetto. Molte delle modifiche che andremo ad operare nei dataframe saranno orientate prorpio ad ottimizzare la struttura dei dati per consentirne la lettura a ggplot.
+
+Vediamo come funziona: la funzione ggplot ha bisogno di due argomenti essenziali che sono i dati (`data`) che possono essere pasasti attraverso la pipe e il `mapping` che viene gestito dalla funzione `aes()`. 
+Nella funzione `aes()` vengono inseriti gli aesthetics ovvero i valori che governeranno il grafico, ad esempio i valori di "x", "y", "colour", "size", "pch" (aspetto), "alpha", "group", etc. 
+
+Il modo migliore per usare ggplot è usarlo assieme ai dataframe, infatti possiamo assegnare ai valori dentro aes i nomi delle colonne del dataframe.
+
+Vediamo un esempio con penguins:
+```{r}
+penguins %>% 
+  # passo alla funzione ggplot il dataframe. La funzione ggplot prende come primo argomento data.
+  ggplot(
+    mapping = aes(
+      x = bill_length_mm, # i valori di x li prendi dalla colonna bill_length_mm
+      y = bill_depth_mm   #i valori di y li prendi dalla colonna bill_depth_mm
+      )
+      )
+```
+
+il grafico è vuoto! Perché? Non c'è nulla di sbagliato, solo che ggplot da solo non basta, bisogna dirgli che grafica vogliamo disegnare. Infatti, se notate gli assi hanno nomi delle variabili e valori, è il contenuto del grafico che è vuoto. 
+
+### Variabili continue vs variabili continue: geom_point(), geom_line(), geom_smooth(method = "lm")
+
+ggplot supporta tantissimi elementi grafici e tutti questi sono funzioni con prefisso `geom_`, ad esempio `geom_point()` produce punti, `geom_line()` linee, etc. Per aggiungere elementi grafici a ggplot dobbiamo usare la `+`:
+
+```{r}
+penguins %>% 
+  # passo alla funzione ggplot il dataframe. La funzione ggplot prende come primo argomento data.
+  ggplot(
+    mapping = aes(
+      x = bill_length_mm, # i valori di x li prendi dalla colonna bill_length_mm
+      y = bill_depth_mm   #i valori di y li prendi dalla colonna bill_depth_mm
+      )
+      ) + # disegnami punti utilizzando gli aes che ti ho già fornito
+  geom_point()
+```
+
+ed ecco un grafico a dispersione. 
+
+Possiamo anche aggiungere più elementi grafici contemporaneamente, come punti e linee:
+
+```{r}
+penguins %>% 
+  # passo alla funzione ggplot il dataframe. La funzione ggplot prende come primo argomento data.
+  ggplot(
+    mapping = aes(x = bill_length_mm, y = bill_depth_mm)) + 
+  geom_point() + # aggiungi punti
+  geom_line() # aggiungi linee
+  
+```
+
+una funzione utile è `geom_smooth(method = "lm")`, che esegue una regressione lineare sui dati e disegna la retta direttamente nel grafico.
+
+```{r}
+penguins %>% 
+  # passo alla funzione ggplot il dataframe. La funzione ggplot prende come primo argomento data.
+  ggplot(mapping = aes(x = bill_length_mm, y = bill_depth_mm)) + 
+  geom_point() + # disegna i punti
+  geom_smooth(method = "lm") # disegna la regressione lineare sui punti
+```
+
+
+è da notare che tutti gli elementi grafici che aggiungiamo dopo ggplot vengono costruiti a partire dai dati che abbiamo inserito in `aes()`! Ogni funzione `geom_` ha la possibilità di importare altri dati e definire nuove aes; di default vengono presi quelli forniti dalla funzione ggplot.
+
+Oltre a variabili proviamo ora ad assegnare un valore al colore:
+
+```{r}
+penguins %>% 
+  # passo alla funzione ggplot il dataframe. La funzione ggplot prende come primo argomento data.
+  ggplot(
+    mapping = aes(x = bill_length_mm, 
+                  y = bill_depth_mm,
+                  colour = species  # colora in base alla specie
+                  )) + 
+  geom_point() 
+```
+
+vediamo che il grafico ha assegnato tre colori diversi ai punti in base alla specie. Da notare che R costruisce in automatico una legenda. 
+
+NB: i colori vengono assegnati da ggplot non siamo noi a controllarli! Ovvero, se scrivessi `aes(colour = "red")` ggplot non disegnerebbe l'elemento in rosso, ma "red" verrebbe considerata come una categoria a cui ggplot assegnerà un colore secondo la sua palette! C'è un modo per assegnare manulamente i colori? Sì, ma è un po' complesso. In compenso il pacchetto `ggplot2` e la sua estensione `ggthemes` hanno diverse funzioni `scale_colour_` che ci consentono di utilizzare palette diverse. Ad esempio, costruiamo il grafico precedente modificando la palette di colori:
+
+```{r}
+penguins %>% 
+  # passo alla funzione ggplot il dataframe. La funzione ggplot prende come primo argomento data.
+  ggplot(
+    mapping = aes(x = bill_length_mm, 
+                  y = bill_depth_mm,
+                  colour = species  # colora in base alla specie
+                  )) + 
+  geom_point() + 
+  scale_colour_viridis_d()
+```
+
+gli elementi `geom_` hanno in realtà la possibilità di subire modifiche nell'apparenza, ma queste devono essere dentro le parentesi ma fuori da `aes()`. NB: queste modifiche potrebbero non essere poi riportate in legenda, quindi bisogna fare attenzione.
+
+```{r}
+penguins %>% 
+  # passo alla funzione ggplot il dataframe. La funzione ggplot prende come primo argomento data.
+  ggplot(
+    mapping = aes(x = bill_length_mm, 
+                  y = bill_depth_mm,
+                  colour = species  # colora in base alla specie
+                  )) + 
+  # anche se gli ho detto di colorare in base alla specie, fornendo il colore a geom_ l'aes è stata sovrascritta
+  geom_point( col = "red", size = 3)
+```
+
+
+Se invece di usare una variabile categorica nel colore usiamo una variabile continua i punti verranno colorati secondo ua scala di colori:
+
+```{r}
+penguins %>% 
+  # passo alla funzione ggplot il dataframe. La funzione ggplot prende come primo argomento data.
+  ggplot(
+    mapping = aes(x = bill_length_mm, 
+                  y = bill_depth_mm,
+                  colour = flipper_length_mm  # colora in base alla flipper length
+                  )) + 
+  geom_point()
+```
+
+E se assegnamo anche la shape la legenda e i punti verranno costruiti di conseguenza:
+
+```{r}
+penguins %>% 
+  # passo alla funzione ggplot il dataframe. La funzione ggplot prende come primo argomento data.
+  ggplot(
+    mapping = aes(x = bill_length_mm, 
+                  y = bill_depth_mm,
+                  colour = species,  # colora in base alla specie
+                  pch = island
+                  )) + 
+  geom_point() 
+```
+
+Assegnare il colore, la size o pch con variabili categoriche è utile con la funzione geom_smooth(method = "lm") perché consente di costruire contemporaneamente più rette con poche righe di codice:
+```{r}
+penguins %>% 
+  # passo alla funzione ggplot il dataframe. La funzione ggplot prende come primo argomento data.
+  ggplot(
+    mapping = aes(x = bill_length_mm, 
+                  y = bill_depth_mm,
+                  colour = species  # colora in base alla specie
+                  )) + 
+  geom_point() + geom_smooth(method = "lm")
+```
+
+come vedete la funzione `geom_smooth()` ha agito in base al colore. 
+
+Per estendere le rette si può assegnare `fullrange = TRUE` e per rimuovere le bande dell'errore `se = FALSE`:
+
+```{r}
+penguins %>% 
+  # passo alla funzione ggplot il dataframe. La funzione ggplot prende come primo argomento data.
+  ggplot(
+    mapping = aes(x = bill_length_mm, 
+                  y = bill_depth_mm,
+                  colour = species  # colora in base alla specie
+                  )) + 
+  geom_point() + geom_smooth(method = "lm", se = FALSE, fullrange = TRUE)
+```
+
+Se volessi disegnare le rette per ogni colore e una retta con tutti i punti dovrei aggiungere due geom_smooth e in una rimuovere il colore o assegnare una nuova categoria di colore:
+```{r}
+penguins %>% 
+  # passo alla funzione ggplot il dataframe. La funzione ggplot prende come primo argomento data.
+  ggplot(
+    mapping = aes(x = bill_length_mm, 
+                  y = bill_depth_mm,
+                  colour = species  # colora in base alla specie
+                  )) + 
+  geom_point() + 
+  geom_smooth(method = "lm", se = FALSE, fullrange = TRUE) + # rette in base alla specie
+  geom_smooth(
+    mapping = aes(colour = "All"), # modifico il mapping per questa funzione: adesso tutti i punti 
+                                   # o le linee disegnate apparterranno al colore "All"
+    method = "lm", se = FALSE, fullrange = TRUE)
+```
+
+la retta globale quì è disegnata in viola.
+
+### Variabili categoriche vs variabili continue: geom_boxplot(), geom_violin(), geom_jitter()
+
+Posso costruire anche grafici con variabili categoriche nelle ascisse e continute nelle ordinete, utilizzando le funzioni `geom_boxplot()`, `geom_violin()` o `geom_jitter()`. Quest'ultima costruisce un grafico a dispersione con un rumore casuale nei valori, regolabile con le variabili width e height:
+```{r}
+penguins %>% 
+  ggplot(aes(x = species, y = bill_length_mm)) + 
+  geom_violin() + geom_jitter(width = 0.1, height = 0) # disegno sia  i punti che il violin
+
+penguins %>% 
+  ggplot(aes(x = species, y = bill_length_mm)) + 
+  geom_boxplot()
+```
+
+### Solo variabili continue: geom_histogram(), geom_density()
+
+Posso anche costruire grafici con una sola variabile continua come istogrammi o density plot:
+```{r}
+penguins %>% 
+  ggplot(aes(x = bill_length_mm, 
+             fill = species, # colore interno
+             colour = species # colore del bordo
+             )) + 
+  geom_histogram(
+    position = position_dodge(), # fa in modo che le colonne non si sovrappongano; utile con più colori
+    alpha = 0.5 # assegno il valore di trasparenza a 0.5
+                 ) 
+
+penguins %>% 
+  ggplot(aes(x = bill_length_mm, 
+             fill = species, # colore interno
+             colour = species # colore del bordo
+             )) + geom_density(alpha = 0.4 # assegno il valore di trasparenza a 0.4
+                               )
+```
+
+### Solo variabili categoriche: geom_bar(), geom_count()
+
+Posso anche generare grafici con una o due varaibili categoriche con `geom_bar()` o `geom_count()`, rispettivamente. Queste funzioni contano il numero di elementi uguali:
+```{r}
+penguins %>% 
+  ggplot(aes(x = species)) + 
+  geom_bar() # grafico a barre che conta quanti individui ho per specie
+
+penguins %>% 
+  ggplot(aes(x = species, y = island)) + 
+  geom_count() # conta quante combinazioni di specie-isola ho
+```
+
+### Facet_wrap()
+
+Un'altra funzione utile per costruire più grafici contemporaneamente è `facet_wrap()` che consente di costruire grafci in base a fino a due variabili categoriche:
+```{r}
+penguins %>% 
+  drop_na() %>% 
+  
+  ggplot(aes(x = sex, fill = species)) + 
+  geom_bar(position = position_dodge()) + 
+  ggtitle("Grafico suddiviso per anno e per isola") + # aggiungi titolo
+  facet_wrap(year~island) # suddividi il grafico per anno e per isola
+
+penguins %>% 
+  drop_na() %>% 
+  
+  ggplot(aes(x = sex, fill = species)) + 
+  geom_bar(position = position_dodge()) + 
+  ggtitle("Grafico suddiviso per isola") + # aggiungi titolo
+  facet_wrap(~island) # suddividi il grafico per isola
+
+penguins %>% 
+  drop_na() %>% 
+  
+  ggplot(aes(x = sex, fill = species)) + 
+  geom_bar(position = position_dodge()) + 
+  ggtitle("Grafico suddiviso per anno") + # aggiungi titolo
+  facet_wrap(year~.) # sddividi il grafico per anno
+```
+
+
+### pivot_longer() e pivot_wider()
+
+Come abbiamo visto ggplot ragiona per colonna, non per riga. Tuttavia, ci sono delle situazioni in cui questo ragionare per colonna non ci aiuta a plottare certi tipi di dati, ad esempio diverse serie temporali come riportate qui sotto:
+
+```{r}
+set.seed(1) # rendo riproducibili i numeri casuali
+df0 <- data.frame(
+  t = seq(0, 10)   # creo un data frame con una colonna t con valori da 0 a 10
+) %>% 
+  mutate( # aggiungo 6 colonne y che seguono la legge e^(-k*t) dove k è un numero casuale da 0 a 1. (cinetica primo ordine)
+    y1 = exp(-runif(1) * t), 
+    y2 = exp(-runif(1) * t),
+    y3 = exp(-runif(1) * t),
+    y4 = exp(-runif(1) * t),
+    y5 = exp(-runif(1) * t),
+    y6 = exp(-runif(1) * t)
+  )
+df0
+```
+
+questo potrebbe essere un tipico import di dati in cui ogni colonna rappresenta la concentrazione di un reagente sottoposto a sei condizioni di degradazione diverse. Se dovessi plottare questi dati con ggplot dovrei scrivere un codice molto lungo e dovrei cambiare le aes per ogni elemento geom_ aggiunto:
+```{r}
+df0 %>% 
+  ggplot(aes(x = t)) + # assegno un valore comune a x che è il tempo
+  geom_line(aes(y = y1, col = "y1")) + # i valori di y qui saranno di y1 e il colore di "y1"
+  geom_line(aes(y = y2, col = "y2")) +
+  geom_line(aes(y = y3, col = "y3")) +
+  geom_line(aes(y = y4, col = "y4")) +
+  geom_line(aes(y = y5, col = "y5")) +
+  geom_line(aes(y = y6, col = "y6")) 
+```
+
+NB: assegnare un valore al colore dento aes() non definisce il colore! ggplot assegna un valore di colore secondo la sua palette. Il valore che date voi è il nome che verrà visualizzato in legenda!
+
+In questo caso sono poche righe di codice, ma nel caso di prove con un numero considerevole di repliche questa strategia è deleteria, a maggior ragione se dobbiamo utilizzare più elementi grafici contemporaneamente. In nostro aiuto possiamo chiamare la funzione `pivot_longer()`. pivot_longer prende n colonne numeriche e le trasforma in due colonne inserendo tutti i valori presi dalle varie colonne in una sola mentre nella seconda colonna viene riportato il nome della colonna da cui è stato preso il valore. La funzione `pivot_wider()` fa esattamente l'operazione inversa, ovvero date in input una colonna di caratteri e una di valori rimodella il dataframe in modo da creare n colonne quanti sono i caratteri distinti della prima colonna e inserisce all'interno di ogni colonna i valori che appartenevano alla stessa riga. é più facile a farlo che spiegarlo. 
+
+Prendiamo questo semplice data frame a titolo di esempio per pivot longer:
+
+```{r}
+data.frame(ID = c("#1", "#2", "#3"), a = c(1,2,3), b = c(4,5,6))
+```
+
+applicando pivot longer alle colonne a e b:
+```{r}
+data.frame(ID = c("#1", "#2", "#3"), a = c(1,2,3), b = c(4,5,6)) %>% 
+  pivot_longer(c(a,b))
+```
+
+come vediamo i nomi delle colonne ora sono nella colonna names e i valori contenuti sono nella colonna values. I valori che erano conenuti in a avranno un corrispondente valore in riga "a" mentre i valori che erano contenuti nella colonna b avranno un corrispondente valore "b". I valori di ID rimangono quelli assegnati in principio e vengono duplicati se necessario.
+
+pivot_wider fa esattamente l'opposto, solo che devo specificare la colonna da cui prendere i nomi e quella da cui prendere i valori:
+```{r}
+data.frame(ID = c("#1", "#2", "#3"), a = c(1,2,3), b = c(4,5,6)) %>% 
+  pivot_longer(c(a,b)) %>% 
+  pivot_wider(names_from = "name", values_from = "value") 
+```
+
+ed ecco il dataframe di prima!
+
+Riprendiamo ora il nostro dataframe con le cinetiche
+```{r}
+df0
+```
+
+Per plottare tutte le curve in poche linee di codice possiamo usare pivot_longer():
+
+```{r}
+df0 %>% 
+  pivot_longer(y1:y6) # le colonne da y1 a y6
+```
+
+applicando pivot longer otteniamo tutti i valori di concentrazione in un unica colonna, associati al valore del tempo in cui sono stati misurati e al nome della colonna. Fare un grafico con ggplot ora è un gioco da ragazzi:
+
+```{r}
+df0 %>% 
+  pivot_longer(y1:y6) %>% 
+  
+  ggplot(aes(x = t, 
+             y = value, # prendi i valori di y dalla colonna value
+             colour = name # assegna i colori in base alla colonna name: ovvero ogni experimento avrà un suo colore
+             )) + 
+  geom_line()
+```
+
+oppure con facet_wrap:
+
+```{r}
+df0 %>% 
+  pivot_longer(y1:y6) %>% 
+  
+  ggplot(aes(x = t, 
+             y = value, # prendi i valori di y dalla colonna value
+             colour = name # assegna i colori in base alla colonna name: ovvero ogni experimento avrà un suo colore
+             )) + 
+  geom_line() +
+  facet_wrap(~name)
+```
+
+In caso di tabelle ricche di dati, queste funzioni consentono di costruire grafici e analizzare i dati molto più velocemente.
+Ad esempio se volessi costruire un grafico con il dataset penguins in cui mostro contemporaneamente bill_length, bill_depth e flipper_length in funzione della body_mass e colorare in base alla specie posso usare il seguente codice:
+
+```{r}
+penguins %>% 
+  pivot_longer(bill_length_mm:flipper_length_mm) %>% # pivot_longer delle colonne da bill_length a flipper_length
+  
+  ggplot(aes(x = body_mass_g, y = value, col = species)) + 
+  geom_point() + facet_wrap(~name, 
+                            scales = "free_y" # la scala valori delle y non è uguale nei facets
+                            )
+```
+
+immaginate quante linee di codice avreste dovuto scrivere senza `pivot_longer()`!
+
+### Reframe() (o summarise()) e group_by()
+
+Reframe consente di creare un nuovo dataframe a partire dai dati del vecchio. Ad esempio se volessi un nuovo dataframe con solo le medie delle lunghezze e profondità del becco:
+```{r}
+p1 %>% 
+  drop_na(bill_length_mm, bill_depth_mm) %>% 
+  # dai dati del vecchio dataframe costruiscine uno nuvo con le seguenti colonne:
+  reframe(mean_bill_length = mean(bill_length_mm), # conterrà la media dei valori di bill_length
+          mean_bill_depth = mean(bill_depth_mm)    # conterrà la media dei valori di bill_depth
+          )
+```
+
+Usato in combinazione con `group_by()` consente di applicare le funzioni in base al valore di un'altra colonna. Ad esempio, se volessi le medie in base alla specie con anche la deviazione standard:
+```{r}
+pm <- p1 %>% 
+  drop_na(bill_length_mm, bill_depth_mm) %>% 
+  group_by(species) %>% # raggruppa in base al valore che trovi in specie 
+  # costruisci un nuovo dataframe usando i dati del vecchio
+  reframe(mean_bill_length = mean(bill_length_mm),
+          sd_bill_length = sd(bill_length_mm),
+          mean_bill_depth = mean(bill_depth_mm),
+          sd_bill_depth = sd(bill_depth_mm)
+          )
+pm
+```
+
+da notare che la colonna `species` è rimasta anche se non era stata inserita in reframe. Questo perché avendo raggruppato per i valori di species `reframe()` la tiene in automatico.
+
+
+Costruiamo il grafico dei valori medi di bill_length con le bande dell'errore:
+```{r}
+pm %>% 
+  ggplot(aes(x = species, 
+             y = mean_bill_length, 
+             ymax = mean_bill_length + sd_bill_length, # valore massimo di y media + dev std
+             ymin = mean_bill_length - sd_bill_length  # valore massimo di y media - dev std
+             )) + geom_col() + 
+  geom_errorbar(  # costruisce barre dellerrore
+    width = 0.3 # aggiusta la larghezza delle barre orizontali
+    )
+```
+
+Se uso la funzione `ungroup()` dopo aver usato `group_by()`, rimuovo il raggruppamento:
+```{r}
+p1 %>% 
+  drop_na(bill_length_mm, bill_depth_mm) %>% 
+  group_by(species) %>% # ragguppo
+  ungroup() %>% # tolgo il raggruppamento: ora reframe non terrà conto della specie
+  reframe(mean_bill_length = mean(bill_length_mm),
+          sd_bill_length = sd(bill_length_mm),
+          mean_bill_depth = mean(bill_depth_mm),
+          sd_bill_depth = sd(bill_depth_mm)
+          )
+```
+
+
+### full_join()
+
+Una funzione utile per unire diversi dataframe relativi agli stessi dati è `full_join()`.
+
+Vogliamo calclare il discostamento dalla media di specie per ogni pinguino. Un modo efficace è usare la funzione `full_join()` per unire i dataframe `pm` che contiene le medie e `penguins` che contiene i valori degli individui. Successivamente possiamo comuputare la differenza in una colonna a parte con `mutate()`. 
+
+Partiamo dal codice per il calcolo della media. Immaginiamo che sia un dataframe fornito e non siamo stati noi a crearlo. Prima di unire i daframe voglio togliere le due colonne delle deviazioni standard. Uso la funzione `select()` in combinazione con `starts_with()`:
+
+```{r}
+pm %>% 
+  # seleziona tutto tranne le colonne che cominciano per "sd_"
+  select(-starts_with("sd_")) 
+  # altre funzioni utilizzabili dentro select sono ends_with() o contains() 
+```
+ 
+Ora unisco il dataframe delle medie con il precedente. Per farlo devo indicare una colonna che funga da indice per associare i valori. In questo caso vogliamo unire i dataframe in base alla specie. Posso usare anche due colonne contemporaneamente come indici. NB: le colonne usate come indice devono avere lo stesso nome.
+ 
+```{r}
+pm %>% 
+  select(-starts_with("sd_")) %>% 
+  
+  # unisci questo dataframe con il dataframe p1 indicizzando per la colonna species
+  full_join(p1, by = join_by(species))
+```
+
+da qui con mutate posso calcolare i residui dal valore medio:
+
+```{r}
+pm %>% 
+  select(-starts_with("sd_")) %>% 
+  full_join(p1, by = join_by(species)) %>% 
+  mutate(res_bill_length = mean_bill_length - bill_length_mm,
+         res_bill_depth = mean_bill_depth - bill_depth_mm, 
+         .before = ID # inserisci le colonne prima della colonna ID
+         )
+
+
+```
+
+
+Ora costruiamo un istogramma in cui visualizziamo i valori dei residui di bill_length, con diversi frame in funzione della specie e coloriamo in base all'isola:
+
+```{r}
+pm %>% 
+  select(-starts_with("sd_")) %>% 
+  full_join(p1, by = join_by(species)) %>% 
+  mutate(res_bill_length = mean_bill_length - bill_length_mm,
+         res_bill_depth = mean_bill_depth - bill_depth_mm
+         ) %>% 
+  
+  ggplot(aes(x = res_bill_length, fill = island)) + 
+  geom_histogram() +
+  # costruisce frame come facet_wrap solo che posso indicare se separare i grafici per riga o per colonna
+  facet_grid(rows = "species") 
+```
+
+e se volesimo sapere la distribuzione in funzione sia della specie che dell'isola, ma ottenendo un grafico come il precedente? Unisco le colonne e creo una categoria "isola-specie" con la funzione `unite()` che unisce due colonne:
+```{r}
+# assegno alla variabile pl il grafico 
+pl <- pm %>% 
+  select(-starts_with("sd_")) %>% 
+  full_join(p1, by = join_by(species)) %>% 
+  mutate(res_bill_length = mean_bill_length - bill_length_mm,
+         res_bill_depth = mean_bill_depth - bill_depth_mm
+         ) %>% 
+  # unisci i valori nelle colonne island e species in un'unica colonna chiamata islandSpecies
+  unite("islandSpecies", island, species) %>% 
+  
+  ggplot(aes(res_bill_length, fill = islandSpecies)) + geom_histogram(position = position_dodge()) + facet_grid(rows = "islandSpecies")
+
+pl # se richiamo la variabile ottengo il grafico
+```
+
+
+### ggsave()
+
+Ora per salvare un grafico creato con ggplot possiamo usare la funzione ggsave insicando il nome del file con l'estensione, il grafico e l'estensione (device) dell'immagine salvata. Ad esempio per salvare il grafico precedente in png.
+
+```
+ggsave(filename = "plot1.png", plot = pl, device = "png")
+```
+
+### theme()
+
+Le funzioni theme ci consentono di gestire l'aspetto dei nostri grafici. Ci sono delle funzioni già presenti nel pacchetto `ggplot2`, come `theme_bw()` o `theme_classic()`, altre invece sono presenti nel pacchetto `ggthemes`. 
+
+Per modificare l'aspettto di un grafico dobbiamo aggiungere le funzioni theme:
+
+```{r}
+pl +
+  theme_bw() + # aggiungo il tema bianco e nero
+  # modifico ulteriormente il tema con la funzione theme
+  theme( 
+        legend.position = "left", # la posizione della legenda sarà sotto il grafico
+        aspect.ratio = 1            # i grafici dovranno essere quadrati
+  )
+```
+
+Possiamo salvare a nostra volta i theme in variabili per poi aggiungerli ai grafici.
+```{r}
+my_theme <- theme_bw() + theme(legend.position = "left", aspect.ratio = 1)
+
+pl + my_theme
+```
+
+O addirittura impostare come theme di default un tema con la funzione `theme_set()`:
+
+```{r}
+theme_set(my_theme) # tutti i grafici prodotti con ggplot dopo aver eseguito questa funzione avranno come theme my_theme
+
+pl + ggtitle("I grafici già salvati non sono influenzati da theme_set()")# i grafici salvati non sono influenzati da theme_set()
+# ma quelli nuovi sì
+penguins %>% 
+  ggplot(aes(x = bill_length_mm, y = bill_depth_mm, colour = species)) + 
+  geom_point() + ggtitle("Qui è stato usato il tema di default my_theme")
+
+```
+
+### ggtitle(), labs()
+
+Per modificare il titolo e sottotitolo possiamo usare la funzione `ggtitle()`, mentre per gli assi `xlab()` e `ylab()`
+
+```{r}
+penguins %>% 
+  ggplot(aes(x = bill_length_mm, y = bill_depth_mm, colour = species)) + 
+  geom_point() + 
+  ggtitle("Titolo", subtitle = "Stottotitolo") +
+  xlab("Asse delle x") + 
+  ylab("Asse delle y")
+```
+
+in generale possiamo usare la funzione `labs() `per modificare tutti questi elementi e altri contemporaneamente:
+```{r}
+penguins %>% 
+  ggplot(aes(x = bill_length_mm, y = bill_depth_mm, colour = species, shape = island)) + 
+  geom_point() +
+  labs(
+    title = "Titolo", subtitle = "Sottotitolo", 
+    caption = "Caption", 
+    tag = "Tag", 
+    x = "Asse x",
+    y = "Asse y", 
+    colour = "Legenda dei colori",
+    shape = "Legenda delle forme"
+  ) + theme(legend.position = "right")
+```
+
+
+## BONUS: Plotly
+
+Il pacchetto `plotly` vi consente, anche a partire da grafici ggplot, di creare grafici interattivi. Utili per l'analisi dati. Il codice non è stato eseguito perché il file sarebbe stato molto pesante, però potete copiarlo e provare in un vostro R markdown.
+```{r eval=FALSE}
+# carico il pacchetto NB: dovete installarlo con install.packages("plotly")
+library(plotly)
+```
+
+
+Per convertire un grafico ggplot in plotly uso la funzione `ggplotly()`. Tutti gli aes che utilizzo per ggplot saranno utilizzati anche per creare il grafico plotly, inoltre spostando il cursore su un determinato punto saranno visibili i valori delle variabili aes di quel punto.
+```{r eval=FALSE}
+pl2 <- p1 %>% 
+  drop_na(bill_length_mm, bill_depth_mm) %>% 
+  ggplot(aes(bill_length_mm, bill_depth_mm, col = species, label = ID)) + 
+  geom_point() + theme_bw()
+  
+pl2 %>% 
+  ggplotly()
+```
+
+
+Altrimenti posso costruire il grafico con linguaggio plotly simile a quello di ggplot:
+```{r eval=FALSE}
+penguins %>% 
+  plot_ly(
+    type = "scatter3d", # tipo di grafico
+    x = ~bill_length_mm, # le colonne dei valori in x, y, z e colore precedute da ~
+    y = ~bill_depth_mm,
+    z = ~body_mass_g,
+    color = ~species, 
+    mode = "markers" 
+  )
+```
+
+
+Con R base possiamo creare grafici conotour per visualizzare superfici costruite con coordinate x, y, z come nella variabile volcano (variabile interna di R)
+```{r eval=FALSE}
+volcano %>% 
+  filled.contour()
+```
+
+
+Con ggplotly possiamo costruire un grafico contour in 3D.
+```{r eval=FALSE}
+plot_ly(
+  type = "surface",
+  z = ~volcano
+)
+```
+
+
+Infine possiamo anche creare animazioni aggiungendo la voce frame e indicando la variabile per cui vogliamo creare diversi frame del grafico.
+```{r eval=FALSE}
+set.seed(10); data.frame(
+  id = rep(1:10,  5),
+  anno = rep(2020:2024, each = 10)
+) %>% 
+  mutate(conc = rnorm(n(), mean = id * (anno-2020)),
+         temp = rnorm(n(), mean = id)
+           ) %>% 
+  
+  plot_ly(
+    x = ~temp,
+    y = ~conc,
+    frame = ~anno,
+    text = ~id,
+    color = ~as.factor(id),
+    type = "scatter",
+    mode = "markers"
+  )
+  
+  
+```
+
+
+
